@@ -9,12 +9,11 @@ const {
     deleteRoute
 } = require("../controllers/routeController");
 
-router.post("/", addRoute);
+const { protect, authorize } = require("../middleware/authMiddleware");
 
-router.get("/", getRoutes);
-
-router.put("/:id", updateRoute);
-
-router.delete("/:id", deleteRoute);
+router.post("/", protect, authorize("admin"), addRoute);
+router.get("/", protect, authorize("admin", "driver"), getRoutes);
+router.put("/:id", protect, authorize("admin"), updateRoute);
+router.delete("/:id", protect, authorize("admin"), deleteRoute);
 
 module.exports = router;

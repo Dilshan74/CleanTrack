@@ -8,8 +8,10 @@ const {
     getDriverHistory
 } = require("../controllers/historyController");
 
-router.post("/", addHistory);
-router.get("/", getHistory);
-router.get("/driver/:driverId", getDriverHistory);
+const { protect, authorize } = require("../middleware/authMiddleware");
+
+router.post("/", protect, authorize("driver"), addHistory);
+router.get("/", protect, authorize("admin"), getHistory);
+router.get("/driver/:driverId", protect, authorize("admin", "driver"), getDriverHistory);
 
 module.exports = router;

@@ -9,9 +9,11 @@ const {
     deleteRequest
 } = require("../controllers/requestController");
 
-router.post("/", createRequest);
-router.get("/", getRequests);
-router.put("/:id/status", updateStatus);
-router.delete("/:id", deleteRequest);
+const { protect, authorize } = require("../middleware/authMiddleware");
+
+router.post("/", protect, authorize("user"), createRequest);
+router.get("/", protect, authorize("user", "admin"), getRequests);
+router.put("/:id/status", protect, authorize("admin", "driver"), updateStatus);
+router.delete("/:id", protect, authorize("user", "admin"), deleteRequest);
 
 module.exports = router;
