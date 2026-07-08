@@ -21,5 +21,3 @@ Administrators can manage users, drivers, trucks, routes, and collection schedul
 - Collection status updates
 - Admin dashboard
 - User, truck, and route management
-
-# Developers - Dilshan , Hiruna
