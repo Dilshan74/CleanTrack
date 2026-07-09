@@ -1,4 +1,4 @@
-const CollectionRoute = require("../models/collectionRoute.js");
+const Route = require("../models/route.js");
 
 
 // Add Route
@@ -7,7 +7,7 @@ exports.addRoute = async(req,res)=>{
 
 try{
 
-const route = await CollectionRoute.create(req.body);
+const route = await Route.create(req.body);
 
 
 res.status(201).json({
@@ -35,8 +35,8 @@ exports.getRoutes = async(req,res)=>{
 
 try{
 
-const routes = await CollectionRoute.find()
-.populate("driver");
+const routes = await Route.find()
+.populate("assignedDriver");
 
 
 res.json({
@@ -64,7 +64,7 @@ exports.updateRoute = async(req,res)=>{
 try{
 
 
-const route = await CollectionRoute.findByIdAndUpdate(
+const route = await Route.findByIdAndUpdate(
 
 req.params.id,
 
@@ -103,7 +103,7 @@ exports.deleteRoute = async(req,res)=>{
 try{
 
 
-await CollectionRoute.findByIdAndDelete(req.params.id);
+await Route.findByIdAndDelete(req.params.id);
 
 
 res.json({
@@ -120,4 +120,29 @@ message:error.message
 
 }
 
+};
+
+// Schedule a route
+exports.assignSchedule = async (req, res) => {
+    try {
+        const { assignedDriver, collectionTime, truck } = req.body;
+        
+        const updateData = { assignedDriver, collectionTime };
+        // if truck needs to be saved on driver:
+        // this can be handled later or kept simple.
+        
+        const route = await Route.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true }
+        );
+        
+        if (!route) {
+            return res.status(404).json({ success: false, message: "Route not found" });
+        }
+        
+        res.json({ success: true, message: "Schedule created", route });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 };

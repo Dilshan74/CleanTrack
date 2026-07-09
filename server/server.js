@@ -12,6 +12,8 @@ const requestRoutes = require("./routes/requestRoutes");
 const notificationRoutes = require("./routes/notificationRoute");
 const historyRoutes = require("./routes/historyRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const userDashboardRoutes = require("./routes/userDashboardRoutes");
+const truckRoutes = require("./routes/truckRoutes"); // Added truckRoutes
 
 const connectDB = require("./config/db");
 const testRoutes = require("./routes/testRoutes");
@@ -22,8 +24,8 @@ connectDB();
 const app = express();
 
 // Middleware
+app.use(express.json()); // Parses incoming JSON
 app.use(cors());
-app.use(express.json());
 
 // Test Route
 app.get("/", (req, res) => {
@@ -35,12 +37,15 @@ app.use("/api/test", testRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/drivers", driverRoutes); 
+app.use("/api/drivers", driverRoutes);
+app.use("/api/driver", driverRoutes); // Alias for driver dashboard
 app.use("/api/routes", routeRoutes);
+app.use("/api/trucks", truckRoutes); // Mounted trucks API
 app.use("/api/requests", requestRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/user", userDashboardRoutes);
 
 
 // Port

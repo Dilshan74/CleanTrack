@@ -24,14 +24,21 @@ const driverSchema = new mongoose.Schema({
         required:true
     },
 
-    vehicleNumber:{
-        type:String,
-        required:true
+    vehicleNumber: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Truck",
+        default: null
     },
 
-    assignedRoute:{
-        type:String,
-        default:"Not Assigned"
+    assignedRoute: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Route",
+        default: null
+    },
+
+    location: {
+        lat: { type: Number, default: 0 },
+        lng: { type: Number, default: 0 }
     },
 
     status:{
