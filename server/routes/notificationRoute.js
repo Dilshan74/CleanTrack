@@ -13,14 +13,14 @@ markAsRead
 
 
 
-router.post("/", createNotification);
+const { protect, authorize } = require("../middleware/authMiddleware");
 
+// Admins can create any notification
+router.post("/", protect, authorize("admin"), createNotification);
 
-router.get("/:userId", getNotifications);
+// Users/Drivers can view their own notifications
+// (Note: Users already have /api/user/notifications, this is a generic fallback)
+router.get("/:userId", protect, getNotifications);
+router.put("/:id/read", protect, markAsRead);
 
-
-router.put("/:id/read",markAsRead);
-
-
-
-module.exports=router;
+module.exports = router;
