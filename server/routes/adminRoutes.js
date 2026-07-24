@@ -10,12 +10,24 @@ const {
 } = require("../controllers/adminController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
+const adminView = require("../controllers/adminViewController");
 
-// Dashboard stats
+const admin = [protect, authorize("admin")];
+
+// Portal (frontend-shaped) read endpoints
+router.get("/overview", admin, adminView.getOverview);
+router.get("/users", admin, adminView.getUsers);
+router.get("/drivers", admin, adminView.getDrivers);
+router.get("/trucks", admin, adminView.getTrucks);
+router.get("/routes", admin, adminView.getRoutes);
+router.get("/collections", admin, adminView.getCollections);
+router.get("/reports", admin, adminView.getReports);
+router.get("/notifications", admin, adminView.getNotifications);
+
+// Dashboard stats (raw)
 router.get("/dashboard", protect, authorize("admin"), adminDashboard);
 
 // Manage Users
-router.get("/users", protect, authorize("admin"), getAllUsers);
 router.put("/users/:id", protect, authorize("admin"), updateUser);
 router.delete("/users/:id", protect, authorize("admin"), deleteUser);
 
