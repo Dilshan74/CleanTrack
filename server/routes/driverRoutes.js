@@ -19,18 +19,28 @@ const {
 
 const { protect, authorize } = require("../middleware/authMiddleware");
 const driverAuth = require("../middleware/driverAuth");
+const driverView = require("../controllers/driverViewController");
 
 // ==============================
-// Driver Dashboard Routes
+// Driver Portal (frontend-shaped)
+// ==============================
+router.get("/dashboard", driverAuth, driverView.getDashboard);
+router.get("/schedule", driverAuth, driverView.getStops);
+router.get("/stops", driverAuth, driverView.getStops);
+router.patch("/stops/:seq", driverAuth, driverView.updateStop);
+router.get("/history", driverAuth, driverView.getHistory);
+router.get("/notifications", driverAuth, driverView.getNotifications);
+router.get("/profile", driverAuth, driverView.getProfile);
+
+// ==============================
+// Driver Dashboard Routes (raw)
 // ==============================
 // Profile
 router.get("/dashboard/profile", driverAuth, getDriverProfile);
-router.get("/profile", driverAuth, getDriverProfile);
 
 // Schedule / Route
 router.get("/dashboard/route", driverAuth, getAssignedRoute);
 router.get("/route", driverAuth, getAssignedRoute);
-router.get("/schedule", driverAuth, getAssignedRoute);
 
 // Status updates
 router.put("/dashboard/status", driverAuth, updateCollectionStatus);
