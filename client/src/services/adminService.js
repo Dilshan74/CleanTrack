@@ -1,10 +1,23 @@
-import api, { withFallback } from "./api";
+import api from "./api";
 
 /** Admin-facing data. Live API first, mock fallback for local dev. */
 
+async function tryLive(request, fallback) {
+  try {
+    const result = await request();
+    return result;
+  } catch (err) {
+    console.warn("[adminService] API failed, using mock:", err?.response?.status, err?.response?.data?.message || err?.message);
+    return typeof fallback === "function" ? fallback() : fallback;
+  }
+}
+
 export function getOverview() {
-  return withFallback(
-    () => api.get("/admin/overview"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/overview");
+      return data;
+    },
     () => ({
       activeUsers: 4218,
       trucksOnRoute: 18,
@@ -22,8 +35,17 @@ export function getOverview() {
 }
 
 export function getUsers() {
-  return withFallback(
-    () => api.get("/admin/users"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/users");
+      return (data.users || []).map((u) => ({
+        _id: u._id,
+        name: u.fullName || u.name || "—",
+        email: u.email,
+        zone: u.address || "—",
+        status: u.isActive !== false ? "Active" : "Suspended",
+      }));
+    },
     () => [
       { name: "Alex Rivera", email: "alex@example.com", zone: "Zone A", status: "Active" },
       { name: "Jordan Lee", email: "jordan@example.com", zone: "Zone B", status: "Active" },
@@ -36,8 +58,18 @@ export function getUsers() {
 }
 
 export function getDrivers() {
-  return withFallback(
-    () => api.get("/admin/drivers"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/drivers");
+      return (data.data || []).map((d) => ({
+        _id: d._id,
+        name: d.name || "—",
+        license: d.licenseNumber || "—",
+        route: d.assignedRoute?.routeName || "Unassigned",
+        truck: d.vehicleNumber?.plateNumber || "Unassigned",
+        status: d.status || "Available",
+      }));
+    },
     () => [
       { name: "Sam Carter", license: "DL-4471-CT", route: "Route A", truck: "TRK-07", status: "On route" },
       { name: "Lena Ford", license: "DL-2210-CT", route: "Route B", truck: "TRK-03", status: "On route" },
@@ -48,8 +80,19 @@ export function getDrivers() {
 }
 
 export function getTrucks() {
-  return withFallback(
-    () => api.get("/admin/trucks"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/trucks");
+      return (data.trucks || []).map((t) => ({
+        _id: t._id,
+        id: t.plateNumber || t._id,
+        plate: t.plateNumber || "—",
+        capacity: t.capacity ? `${t.capacity} t` : "—",
+        driver: t.assignedDriver?.name || "Unassigned",
+        status: t.status || "Idle",
+        fuel: 0,
+      }));
+    },
     () => [
       { id: "TRK-03", plate: "CT-8842", capacity: "12 t", driver: "Lena Ford", status: "On route", fuel: 72 },
       { id: "TRK-05", plate: "CT-1190", capacity: "10 t", driver: "Nadia Khan", status: "Maintenance", fuel: 40 },
@@ -60,8 +103,19 @@ export function getTrucks() {
 }
 
 export function getRoutes() {
-  return withFallback(
-    () => api.get("/admin/routes"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/routes");
+      return (data.routes || []).map((r) => ({
+        _id: r._id,
+        id: r.routeName || r._id,
+        zone: r.areas?.map((a) => a.areaName).join(", ") || "—",
+        stops: r.areas?.length || 0,
+        days: r.collectionTime || "—",
+        driver: r.assignedDriver?.name || "Unassigned",
+        truck: "—",
+      }));
+    },
     () => [
       { id: "Route A", zone: "Elm District", stops: 42, days: "Mon · Wed · Fri", driver: "Sam Carter", truck: "TRK-07" },
       { id: "Route B", zone: "Riverside", stops: 38, days: "Tue · Thu · Sat", driver: "Lena Ford", truck: "TRK-03" },
@@ -72,8 +126,29 @@ export function getRoutes() {
 }
 
 export function getCollections() {
-  return withFallback(
-    () => api.get("/admin/collections"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/collections");
+      const historyItems = (data.history || []).map((h) => ({
+        id: h._id,
+        route: h.route?.routeName || "—",
+        zone: "—",
+        date: h.createdAt
+          ? new Date(h.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : "—",
+        tons: 0,
+        status: "Completed",
+      }));
+      const routeItems = (data.routes || []).map((r) => ({
+        id: r._id,
+        route: r.routeName || "—",
+        zone: r.areas?.slice(0, 2).map((a) => a.areaName).join(", ") || "—",
+        date: "Today",
+        tons: 0,
+        status: r.status || "Active",
+      }));
+      return [...historyItems, ...routeItems].slice(0, 20);
+    },
     () => [
       { id: "COL-9021", route: "Route A", zone: "Elm District", date: "Jul 14", tons: 9.2, status: "Completed" },
       { id: "COL-9022", route: "Route B", zone: "Riverside", date: "Jul 14", tons: 7.8, status: "Completed" },
@@ -85,8 +160,11 @@ export function getCollections() {
 }
 
 export function getReports() {
-  return withFallback(
-    () => api.get("/admin/reports"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/reports");
+      return data;
+    },
     () => ({
       wasteCollected: "1,284 t",
       recycled: "472 t",
@@ -105,8 +183,25 @@ export function getReports() {
 }
 
 export function getNotifications() {
-  return withFallback(
-    () => api.get("/admin/notifications"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/admin/notifications");
+      return (data.notifications || []).map((n) => ({
+        id: n._id,
+        title: n.title || "Notification",
+        body: n.message || "",
+        time: n.createdAt
+          ? new Date(n.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+          : "—",
+        unread: !n.isRead,
+        tone:
+          n.notificationType === "Route"
+            ? "warning"
+            : n.notificationType === "Request"
+            ? "primary"
+            : "primary",
+      }));
+    },
     () => [
       { id: 1, title: "High-priority complaint", body: "3 new complaints flagged in Zone C.", time: "15m ago", unread: true, tone: "destructive" },
       { id: 2, title: "Truck maintenance", body: "TRK-05 flagged for service (fuel system).", time: "2h ago", unread: true, tone: "warning" },
@@ -114,6 +209,26 @@ export function getNotifications() {
       { id: 4, title: "Recycling target met", body: "Monthly recycling target reached (37%).", time: "3d ago", unread: false, tone: "success" },
     ],
   );
+}
+
+export async function addUser(payload) {
+  const { data } = await api.post("/auth/register", payload);
+  return data;
+}
+
+export async function addDriver(payload) {
+  const { data } = await api.post("/admin/drivers", payload);
+  return data;
+}
+
+export async function addTruck(payload) {
+  const { data } = await api.post("/admin/trucks", payload);
+  return data;
+}
+
+export async function addRoute(payload) {
+  const { data } = await api.post("/admin/routes", payload);
+  return data;
 }
 
 export default {
@@ -125,4 +240,8 @@ export default {
   getCollections,
   getReports,
   getNotifications,
+  addUser,
+  addDriver,
+  addTruck,
+  addRoute,
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Leaf, User, Mail, Lock } from "lucide-react";
+import { Leaf, User, Mail, Lock, Phone, MapPin, AlertCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { APP_NAME, ROLES, ROLE_HOME } from "../../utils/constants";
 import { validateRegister, hasErrors } from "../../utils/helpers";
@@ -12,12 +12,17 @@ export default function Register() {
     name: "",
     email: "",
     password: "",
-    role: ROLES.USER,
+    phone: "",
+    address: "",
+    role: ROLES.USER, // residents only — admin/driver accounts are created by admins
   });
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState("");
 
   function update(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
+    setServerError("");
+    setErrors((e) => ({ ...e, [key]: undefined }));
   }
 
   async function handleSubmit(e) {
@@ -26,8 +31,14 @@ export default function Register() {
     setErrors(validation);
     if (hasErrors(validation)) return;
 
-    const user = await register(form);
-    navigate(ROLE_HOME[user.role] || "/", { replace: true });
+    try {
+      const user = await register(form);
+      navigate(ROLE_HOME[user.role] || "/", { replace: true });
+    } catch (err) {
+      setServerError(
+        err?.response?.data?.message || "Registration failed. Please try again."
+      );
+    }
   }
 
   return (
@@ -46,7 +57,15 @@ export default function Register() {
             Join {APP_NAME} to track pickups and report issues.
           </p>
 
+          {serverError && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{serverError}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {/* Full name */}
             <label className="block text-sm">
               <span className="text-muted-foreground">Full name</span>
               <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
@@ -61,6 +80,7 @@ export default function Register() {
               {errors.name && <span className="mt-1 block text-xs text-destructive">{errors.name}</span>}
             </label>
 
+            {/* Email */}
             <label className="block text-sm">
               <span className="text-muted-foreground">Email</span>
               <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
@@ -76,6 +96,38 @@ export default function Register() {
               {errors.email && <span className="mt-1 block text-xs text-destructive">{errors.email}</span>}
             </label>
 
+            {/* Phone */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">Phone number</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => update("phone", e.target.value)}
+                  placeholder="+1 (555) 000-0000"
+                  className="w-full bg-transparent py-2 outline-none"
+                />
+              </div>
+              {errors.phone && <span className="mt-1 block text-xs text-destructive">{errors.phone}</span>}
+            </label>
+
+            {/* Address */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">Address</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  value={form.address}
+                  onChange={(e) => update("address", e.target.value)}
+                  placeholder="42 Maple Ave, Elm District"
+                  className="w-full bg-transparent py-2 outline-none"
+                />
+              </div>
+              {errors.address && <span className="mt-1 block text-xs text-destructive">{errors.address}</span>}
+            </label>
+
+            {/* Password */}
             <label className="block text-sm">
               <span className="text-muted-foreground">Password</span>
               <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
@@ -91,18 +143,8 @@ export default function Register() {
               {errors.password && <span className="mt-1 block text-xs text-destructive">{errors.password}</span>}
             </label>
 
-            <label className="block text-sm">
-              <span className="text-muted-foreground">Register as</span>
-              <select
-                value={form.role}
-                onChange={(e) => update("role", e.target.value)}
-                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value={ROLES.USER}>Resident</option>
-                <option value={ROLES.DRIVER}>Driver</option>
-                <option value={ROLES.ADMIN}>Admin</option>
-              </select>
-            </label>
+            {/* Role is always 'user' for self-registration.
+                Drivers are added by admins; admin accounts are pre-created. */}
 
             <button
               type="submit"

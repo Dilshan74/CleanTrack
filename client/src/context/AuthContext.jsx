@@ -27,6 +27,8 @@ export function AuthProvider({ children }) {
       const { user: loggedIn } = await authService.login(credentials);
       setUser(loggedIn);
       return loggedIn;
+    } catch (err) {
+      throw err; // re-throw so Login.jsx can show the error
     } finally {
       setLoading(false);
     }
@@ -38,6 +40,8 @@ export function AuthProvider({ children }) {
       const { user: created } = await authService.register(payload);
       setUser(created);
       return created;
+    } catch (err) {
+      throw err; // re-throw so Register.jsx can show the error
     } finally {
       setLoading(false);
     }

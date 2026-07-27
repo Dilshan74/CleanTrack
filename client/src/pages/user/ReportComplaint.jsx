@@ -32,9 +32,9 @@ export default function ReportComplaint() {
     setSaving(true);
     const created = await userService.submitComplaint(form);
     setSaving(false);
-    setRef(created.id);
+    setRef(created._id);
     setComplaints((prev) => [
-      { id: created.id, summary: form.description, status: "Reviewing" },
+      { id: created._id, summary: form.description, status: "Reviewing" },
       ...(prev || []),
     ]);
     setForm((f) => ({ ...f, description: "" }));

@@ -9,13 +9,17 @@ const {
     getUserRequests,
     getUserSchedule,
     getUserNotifications,
-    getUserHistory
+    getUserHistory,
+    getUserDashboard
 } = require("../controllers/userDashboardController");
 
 // Use protect middleware for all routes below
 router.use(protect);
 // Ensure only users can access these routes (optional, if you want only 'user' role)
 router.use(authorize("user"));
+
+// 0: Dashboard summary
+router.get("/dashboard", getUserDashboard);
 
 // 1 & 2: View and Update profile
 router.route("/profile")
@@ -37,5 +41,11 @@ router.get("/notification", getUserNotifications);
 
 // 7: View my collection history
 router.get("/history", getUserHistory);
+
+// Aliases: /complaints maps to the same handlers as /requests
+// so that userService.js calls to /user/complaints work correctly
+router.route("/complaints")
+    .post(createCollectionRequest)
+    .get(getUserRequests);
 
 module.exports = router;

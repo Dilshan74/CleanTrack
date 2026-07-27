@@ -2,11 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Plus } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
+import Modal from "../../components/common/Modal";
 
 export default function ManageUsers() {
   const [users, setUsers] = useState(null);
   const [query, setQuery] = useState("");
   const [zone, setZone] = useState("All zones");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    phone: "",
+    address: "",
+  });
 
   useEffect(() => {
     adminService.getUsers().then(setUsers);
@@ -21,14 +32,38 @@ export default function ManageUsers() {
     });
   }, [users, query, zone]);
 
+  function updateForm(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleAddUser(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await adminService.addUser(form);
+      setUsers(null);
+      adminService.getUsers().then(setUsers);
+      setShowAddModal(false);
+      setForm({ fullName: "", email: "", password: "", phone: "", address: "" });
+    } catch (err) {
+      setError(err?.response?.data?.message || err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Manage Users</h1>
-          <p className="text-muted-foreground">4,218 residents registered.</p>
+          <p className="text-muted-foreground">{users ? users.length : "..."} residents registered.</p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
           <Plus className="h-4 w-4" /> Add user
         </button>
       </div>
@@ -86,6 +121,38 @@ export default function ManageUsers() {
           </table>
         </div>
       )}
+
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add User">
+        <form onSubmit={handleAddUser} className="space-y-4">
+          {error && <div className="text-sm text-destructive bg-destructive/10 p-2 rounded-lg">{error}</div>}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Full Name</label>
+            <input required value={form.fullName} onChange={(e) => updateForm("fullName", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Email</label>
+            <input required type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Phone (10 digits)</label>
+            <input required pattern="\d{10}" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Address / Zone</label>
+            <input required value={form.address} onChange={(e) => updateForm("address", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Password</label>
+            <input required type="password" minLength={6} value={form.password} onChange={(e) => updateForm("password", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setShowAddModal(false)} className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
+              {saving ? "Saving..." : "Add User"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
