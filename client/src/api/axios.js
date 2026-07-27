@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import axios from "axios";
 
 const api = axios.create({
@@ -15,3 +16,10 @@ api.interceptors.request.use((config) => {
 });
 
 export default api;
+=======
+/**
+ * Re-export the configured Axios instance from the services layer.
+ * Import from here or directly from "../services/api" — both work.
+ */
+export { default } from "../services/api";
+>>>>>>> origin/dev-dilshan

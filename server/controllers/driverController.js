@@ -1,6 +1,8 @@
 const Driver = require("../models/driver.js");
 const Truck = require("../models/truck.js");
 const Route = require("../models/route.js");
+const CollectionHistory = require("../models/collectionHistory.js");
+const Notification = require("../models/notification.js");
 
 // Add Driver
 exports.addDriver = async (req, res) => {
@@ -199,6 +201,61 @@ exports.completeArea = async (req, res) => {
             message: "Route marked as completed",
             route
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==========================================
+// Get Driver Dashboard Summary
+// ==========================================
+exports.getDashboard = async (req, res) => {
+    try {
+        const driver = await Driver.findById(req.driverProfile._id)
+            .populate("vehicleNumber")
+            .populate("assignedRoute");
+
+        if (!driver) {
+            return res.status(404).json({ success: false, message: "Driver not found" });
+        }
+
+        const route = driver.assignedRoute;
+        const stopsToday = route ? route.areas.length : 0;
+        const completed = route ? route.areas.filter(a => a.status === "Collected").length : 0;
+        const missed = route ? route.areas.filter(a => a.status === "Missed").length : 0;
+        const progress = stopsToday > 0 ? Math.round((completed / stopsToday) * 100) : 0;
+
+        const truck = driver.vehicleNumber;
+
+        res.json({
+            success: true,
+            truck: truck ? truck.plateNumber : "N/A",
+            route: route ? route.routeName : "No route assigned",
+            stopsToday,
+            completed,
+            missed,
+            progress,
+            etaNext: "N/A",
+            etaFinish: route ? route.collectionTime : "N/A",
+            fuel: 0,
+            remainingKm: "N/A",
+            announcements: []
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==========================================
+// Get Driver Notifications
+// ==========================================
+exports.getDriverNotifications = async (req, res) => {
+    try {
+        // Look up notifications by receiver matching the user's ID or driver email
+        const notifications = await Notification.find({ receiver: req.user.id })
+            .sort({ createdAt: -1 })
+            .limit(20);
+        res.json({ success: true, notifications });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
