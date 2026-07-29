@@ -43,7 +43,7 @@ export default function UserDashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Stat icon={Truck} label="Next pickup" value={data.nextPickup.when} hint={`${data.nextPickup.time} · ${data.nextPickup.type}`} />
+        <Stat icon={Truck} label="Next pickup" value={data.nextPickup?.when ?? "None scheduled"} hint={data.nextPickup ? `${data.nextPickup.time} · ${data.nextPickup.type}` : "No upcoming pickups"} />
         <Stat icon={CalendarCheck} label="This month" value={`${data.monthlyPickups} pickups`} hint="On schedule" />
         <Stat icon={Recycle} label="Recycled" value={`${data.recycledKg} kg`} hint="+12% vs last month" tone="success" />
         <Stat icon={MessageSquareWarning} label="Open complaints" value={data.openComplaints} hint="Being reviewed" tone="warning" />
