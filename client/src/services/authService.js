@@ -1,6 +1,5 @@
 import api from "./api";
 import { STORAGE_KEYS, ROLES } from "../utils/constants";
-import { delay } from "../utils/helpers";
 
 function persist(token, user) {
   localStorage.setItem(STORAGE_KEYS.token, token);
@@ -13,46 +12,38 @@ function nameFromEmail(email) {
 }
 
 /**
- * Log in. Attempts the real API first; on failure falls back to a mock login
- * that accepts any valid-looking credentials (handy without a backend).
+ * Log in with real credentials. Throws on failure so the UI can show the error.
  */
-export async function login({ email, password, role = ROLES.USER }) {
-  try {
-    const { data } = await api.post("/auth/login", { email, password, role });
-    persist(data.token, data.user);
-    return data;
-  } catch {
-    await delay();
-    const user = {
-      id: `mock-${role}`,
-      name: nameFromEmail(email),
-      email,
-      role,
-    };
-    const token = `mock.${role}.${Date.now()}`;
-    persist(token, user);
-    return { token, user };
-  }
+export async function login({ email, password }) {
+  // Note: role is NOT sent — the server returns the user's actual DB role.
+  const { data } = await api.post("/auth/login", { email, password });
+  // Backend returns user.fullName — normalize to `name` for consistent frontend use
+  const user = {
+    ...data.user,
+    name: data.user.fullName || data.user.name || nameFromEmail(email),
+  };
+  persist(data.token, user);
+  return { ...data, user };
 }
 
-/** Register a new account. Mock mode signs the user straight in. */
-export async function register({ name, email, password, role = ROLES.USER }) {
-  try {
-    const { data } = await api.post("/auth/register", {
-      name,
-      email,
-      password,
-      role,
-    });
-    persist(data.token, data.user);
-    return data;
-  } catch {
-    await delay();
-    const user = { id: `mock-${role}`, name, email, role };
-    const token = `mock.${role}.${Date.now()}`;
-    persist(token, user);
-    return { token, user };
-  }
+/** Register a new resident account. Throws on failure (e.g. email already taken). */
+export async function register({ name, email, password, phone, address, role = ROLES.USER }) {
+  // Backend destructures `fullName`, `phone`, `address` — send with the correct keys
+  const { data } = await api.post("/auth/register", {
+    fullName: name,
+    email,
+    password,
+    phone,
+    address,
+    role,
+  });
+  // Normalize the response user object (fullName → name)
+  const user = {
+    ...data.user,
+    name: data.user?.fullName || data.user?.name || name,
+  };
+  persist(data.token, user);
+  return { ...data, user };
 }
 
 export function logout() {

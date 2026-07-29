@@ -58,12 +58,18 @@ export function validateLogin({ email, password }) {
   return errors;
 }
 
-export function validateRegister({ name, email, password }) {
+export function isPhone(value) {
+  return /^\d{10}$/.test(String(value || "").trim());
+}
+
+export function validateRegister({ name, email, password, phone, address }) {
   const errors = {};
   if (!isRequired(name)) errors.name = "Name is required.";
   if (!isEmail(email)) errors.email = "Enter a valid email address.";
   if (!minLength(password, 6))
     errors.password = "Password must be at least 6 characters.";
+  if (!isPhone(phone)) errors.phone = "Phone number must be exactly 10 digits.";
+  if (!isRequired(address)) errors.address = "Address is required.";
   return errors;
 }
 

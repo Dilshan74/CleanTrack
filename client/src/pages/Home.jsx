@@ -19,9 +19,9 @@ const features = [
 ];
 
 const dashboards = [
-  { to: "/login", icon: Users, title: "Resident", tone: "bg-primary", desc: "Track pickups, manage profile, report complaints and receive alerts." },
-  { to: "/login", icon: Truck, title: "Driver", tone: "bg-chart-3", desc: "See today's route, update pickup status, share live location." },
-  { to: "/login", icon: ShieldCheck, title: "Admin", tone: "bg-chart-4", desc: "Manage users, drivers, routes and generate reports." },
+  { to: "/login", state: { portal: "user" }, icon: Users, title: "Resident", tone: "bg-primary", desc: "Track pickups, manage profile, report complaints and receive alerts." },
+  { to: "/login", state: { portal: "driver" }, icon: Truck, title: "Driver", tone: "bg-chart-3", desc: "See today's route, update pickup status, share live location." },
+  { to: "/login", state: { portal: "admin" }, icon: ShieldCheck, title: "Admin", tone: "bg-chart-4", desc: "Manage users, drivers, routes and generate reports." },
 ];
 
 export default function Home() {
@@ -62,13 +62,13 @@ export default function Home() {
             and give residents visibility into their collection schedule.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/login" className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 font-medium hover:opacity-90">
+            <Link to="/login" state={{ portal: "user" }} className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 font-medium hover:opacity-90">
               Resident portal <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link to="/login" className="inline-flex items-center gap-2 rounded-lg bg-card border px-5 py-3 font-medium hover:bg-muted">
+            <Link to="/login" state={{ portal: "driver" }} className="inline-flex items-center gap-2 rounded-lg bg-card border px-5 py-3 font-medium hover:bg-muted">
               Driver app
             </Link>
-            <Link to="/login" className="inline-flex items-center gap-2 rounded-lg bg-card border px-5 py-3 font-medium hover:bg-muted">
+            <Link to="/login" state={{ portal: "admin" }} className="inline-flex items-center gap-2 rounded-lg bg-card border px-5 py-3 font-medium hover:bg-muted">
               Admin console
             </Link>
           </div>
@@ -124,7 +124,7 @@ export default function Home() {
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {dashboards.map((d) => (
-            <Link key={d.title} to={d.to} className="group rounded-2xl border bg-card p-6 hover:shadow-lg transition-shadow">
+            <Link key={d.title} to={d.to} state={d.state} className="group rounded-2xl border bg-card p-6 hover:shadow-lg transition-shadow">
               <div className={`h-11 w-11 rounded-xl ${d.tone} text-primary-foreground flex items-center justify-center mb-4`}>
                 <d.icon className="h-5 w-5" />
               </div>
@@ -145,9 +145,9 @@ export default function Home() {
             <p className="opacity-80 mt-3">Pick a role to explore the demo. All three dashboards are wired with sample data.</p>
           </div>
           <div className="flex flex-wrap gap-3 md:justify-end">
-            <Link to="/login" className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground px-5 py-3 font-medium">Resident</Link>
-            <Link to="/login" className="rounded-lg bg-sidebar-accent text-sidebar-accent-foreground px-5 py-3 font-medium">Driver</Link>
-            <Link to="/login" className="rounded-lg bg-card text-card-foreground px-5 py-3 font-medium">Admin</Link>
+            <Link to="/login" state={{ portal: "user" }} className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground px-5 py-3 font-medium">Resident</Link>
+            <Link to="/login" state={{ portal: "driver" }} className="rounded-lg bg-sidebar-accent text-sidebar-accent-foreground px-5 py-3 font-medium">Driver</Link>
+            <Link to="/login" state={{ portal: "admin" }} className="rounded-lg bg-card text-card-foreground px-5 py-3 font-medium">Admin</Link>
           </div>
         </div>
       </section>

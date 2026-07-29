@@ -3,9 +3,22 @@ import { delay, makeRef } from "../utils/helpers";
 
 /** Resident-facing data. Live API first, mock fallback for local dev. */
 
+async function tryLive(request, fallback) {
+  try {
+    return await request();
+  } catch (err) {
+    console.warn("[userService] API failed, using mock:", err?.response?.status, err?.response?.data?.message || err?.message);
+    return typeof fallback === "function" ? fallback() : fallback;
+  }
+}
+
 export function getDashboard() {
-  return withFallback(
-    () => api.get("/user/dashboard"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/user/dashboard");
+      // Server returns { success, data: { nextPickup, monthlyPickups, ... } }
+      return data.data || data;
+    },
     () => ({
       nextPickup: { when: "Tomorrow", time: "7:30 AM", type: "Recyclables" },
       monthlyPickups: 8,
@@ -26,8 +39,19 @@ export function getDashboard() {
 }
 
 export function getSchedule() {
-  return withFallback(
-    () => api.get("/user/schedule"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/user/schedule");
+      const requests = data.data?.scheduledRequests || [];
+      return requests.map((r) => ({
+        date: r.collectionDate
+          ? new Date(r.collectionDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+          : "—",
+        time: "7:30 AM",
+        type: r.garbageType || "General Waste",
+        status: r.status || "Pending",
+      }));
+    },
     () => [
       { date: "Mon, Jul 14", time: "7:30 AM", type: "General waste", status: "Completed" },
       { date: "Wed, Jul 16", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
@@ -35,13 +59,22 @@ export function getSchedule() {
       { date: "Mon, Jul 21", time: "7:30 AM", type: "General waste", status: "Scheduled" },
       { date: "Wed, Jul 23", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
       { date: "Sat, Jul 26", time: "9:00 AM", type: "Bulk pickup", status: "Scheduled" },
-    ],
+    ]
   );
 }
 
 export function getComplaints() {
-  return withFallback(
-    () => api.get("/user/complaints"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/user/complaints");
+      // Server returns { success, data: [...] }
+      const list = data.data || data;
+      return (Array.isArray(list) ? list : []).map((r) => ({
+        id: r._id || r.id,
+        summary: r.description || r.garbageType || "Request",
+        status: r.status || "Pending",
+      }));
+    },
     () => [
       { id: "C-204", summary: "Missed recycling pickup on Maple Ave.", status: "Reviewing" },
       { id: "C-198", summary: "Overflowing bin near park entrance.", status: "Resolved" },
@@ -52,29 +85,72 @@ export function getComplaints() {
 
 export async function submitComplaint(payload) {
   try {
-    const { data } = await api.post("/user/complaints", payload);
-    return data;
-  } catch {
-    await delay();
-    return { id: makeRef("C"), ...payload, status: "Reviewing" };
+    const { data } = await api.post("/user/complaints", {
+      garbageType: mapCategoryToEnum(payload.category),
+      description: payload.description,
+      pickupLocation: payload.location,
+      collectionDate: new Date().toISOString(),
+    });
+    return data.data;
+  } catch (err) {
+    console.warn("[userService] submitComplaint failed:", err?.response?.data?.message);
+    throw err;
   }
 }
 
+function mapCategoryToEnum(category) {
+  const map = {
+    "Missed pickup": "General Waste",
+    "Overflowing bin": "General Waste",
+    "Damaged bin": "General Waste",
+    "Driver behavior": "General Waste",
+    "Other": "General Waste",
+    "Recyclables": "Recyclable",
+    "Organic waste": "Organic",
+  };
+  return map[category] || "General Waste";
+}
+
 export function getNotifications() {
-  return withFallback(
-    () => api.get("/user/notifications"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/user/notifications");
+      return (data.data || []).map((n) => ({
+        id: n._id,
+        title: n.title || "Notification",
+        body: n.message || "",
+        time: n.createdAt
+          ? new Date(n.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+          : "—",
+        unread: !n.isRead,
+        tone: n.notificationType === "Route" ? "warning"
+            : n.notificationType === "Request" ? "primary"
+            : "primary",
+      }));
+    },
     () => [
       { id: 1, title: "Pickup reminder", body: "Recyclables collected tomorrow at 7:30 AM.", time: "2h ago", unread: true, tone: "primary" },
       { id: 2, title: "Complaint update", body: "Your complaint #C-204 is being reviewed.", time: "1d ago", unread: true, tone: "warning" },
       { id: 3, title: "Schedule change", body: "Friday organic pickup moved to 8:00 AM.", time: "2d ago", unread: false, tone: "muted" },
       { id: 4, title: "Recycling milestone", body: "You recycled 42 kg this month. Great job!", time: "4d ago", unread: false, tone: "success" },
-    ],
+    ]
   );
 }
 
 export function getProfile() {
-  return withFallback(
-    () => api.get("/user/profile"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/user/profile");
+      const u = data.data || data;
+      return {
+        name: u.fullName || u.name || "—",
+        email: u.email,
+        phone: u.phone,
+        address: u.address,
+        nationalId: "—", // not in model
+        zone: "—",       // not in model
+      };
+    },
     () => ({
       name: "Alex Rivera",
       email: "alex@example.com",

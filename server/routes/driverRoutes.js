@@ -14,7 +14,9 @@ const {
     getAssignedRoute,
     updateCollectionStatus,
     updateLiveLocation,
-    completeArea
+    completeArea,
+    getDashboard,
+    getDriverNotifications
 }=require("../controllers/driverController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
@@ -23,6 +25,9 @@ const driverAuth = require("../middleware/driverAuth");
 // ==============================
 // Driver Dashboard Routes
 // ==============================
+// Dashboard summary
+router.get("/dashboard", driverAuth, getDashboard);
+
 // Profile
 router.get("/dashboard/profile", driverAuth, getDriverProfile);
 router.get("/profile", driverAuth, getDriverProfile);
@@ -44,6 +49,9 @@ router.put("/location", driverAuth, updateLiveLocation);
 // Complete Area
 router.put("/dashboard/complete-area/:id", driverAuth, completeArea);
 router.put("/complete-area/:id", driverAuth, completeArea);
+
+// Notifications
+router.get("/notifications", driverAuth, getDriverNotifications);
 
 // ==============================
 // Admin Routes (Manage Drivers)

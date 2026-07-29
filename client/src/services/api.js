@@ -36,7 +36,12 @@ export async function withFallback(request, fallback) {
   try {
     const { data } = await request();
     return data;
-  } catch {
+  } catch (err) {
+    console.warn(
+      "[API] Request failed, falling back to mock data:",
+      err?.response?.status,
+      err?.response?.data?.message || err?.message,
+    );
     return typeof fallback === "function" ? fallback() : fallback;
   }
 }

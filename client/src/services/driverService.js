@@ -3,9 +3,22 @@ import { delay } from "../utils/helpers";
 
 /** Driver-facing data. Live API first, mock fallback for local dev. */
 
+async function tryLive(request, fallback) {
+  try {
+    return await request();
+  } catch (err) {
+    console.warn("[driverService] API failed, using mock:", err?.response?.status, err?.response?.data?.message || err?.message);
+    return typeof fallback === "function" ? fallback() : fallback;
+  }
+}
+
 export function getDashboard() {
-  return withFallback(
-    () => api.get("/driver/dashboard"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/dashboard");
+      // Server returns { success, truck, route, stopsToday, completed, ... } directly
+      return data;
+    },
     () => ({
       truck: "TRK-07",
       route: "Route A · Elm District",
@@ -26,8 +39,19 @@ export function getDashboard() {
 }
 
 export function getTodaysSchedule() {
-  return withFallback(
-    () => api.get("/driver/schedule"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/schedule");
+      // Server returns { success, route } where route.areas is the stop list
+      const areas = data.route?.areas || [];
+      return areas.map((a, i) => ({
+        seq: i + 1,
+        addr: a.areaName || `Stop ${i + 1}`,
+        type: "General waste",
+        eta: data.route?.collectionTime || "N/A",
+        status: a.status || "Pending",
+      }));
+    },
     () => [
       { seq: 1, addr: "12 Oak St", type: "Recyclables", eta: "7:30 AM", status: "Done" },
       { seq: 2, addr: "24 Oak St", type: "General waste", eta: "7:38 AM", status: "Done" },
@@ -55,7 +79,8 @@ export function getStops() {
 
 export async function updateStopStatus(seq, status) {
   try {
-    const { data } = await api.patch(`/driver/stops/${seq}`, { status });
+    // Server expects PUT /driver/update-status/:id
+    const { data } = await api.put(`/driver/update-status/${seq}`, { status });
     return data;
   } catch {
     await delay(150);
@@ -77,19 +102,44 @@ export function getHistory() {
 }
 
 export function getNotifications() {
-  return withFallback(
-    () => api.get("/driver/notifications"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/notifications");
+      return (data.notifications || []).map((n) => ({
+        id: n._id,
+        title: n.title || "Notification",
+        body: n.message || "",
+        time: n.createdAt
+          ? new Date(n.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+          : "—",
+        unread: !n.isRead,
+        tone: "primary",
+      }));
+    },
     () => [
-      { id: 1, title: "Route update", body: "Stop #38 added: bulk pickup on Birch Rd.", time: "20m ago", unread: true, tone: "primary" },
-      { id: 2, title: "Road closure", body: "5th St closed — use Oak Ave detour.", time: "1h ago", unread: true, tone: "warning" },
-      { id: 3, title: "Maintenance", body: "TRK-07 scheduled for service Friday.", time: "1d ago", unread: false, tone: "muted" },
-    ],
+      { id: 1, title: "Route update", body: "Route A has 2 new stops added.", time: "1h ago", unread: true, tone: "primary" },
+      { id: 2, title: "Traffic alert", body: "Heavy traffic reported near Elm District.", time: "3h ago", unread: true, tone: "warning" },
+      { id: 3, title: "Maintenance due", body: "Truck TRK-07 is due for oil change tomorrow.", time: "1d ago", unread: false, tone: "muted" },
+    ]
   );
 }
 
 export function getProfile() {
-  return withFallback(
-    () => api.get("/driver/profile"),
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/profile");
+      // Server returns { success, driver: { name, email, phone, licenseNumber, vehicleNumber, assignedRoute, ... } }
+      const d = data.driver || data;
+      return {
+        name: d.name || "—",
+        email: d.email,
+        phone: d.phone,
+        license: d.licenseNumber || "—",
+        truck: d.vehicleNumber?.plateNumber || d.vehicleNumber || "Unassigned",
+        route: d.assignedRoute?.routeName || d.assignedRoute || "Unassigned",
+        shift: "N/A",
+      };
+    },
     () => ({
       name: "Sam Carter",
       email: "sam.driver@example.com",

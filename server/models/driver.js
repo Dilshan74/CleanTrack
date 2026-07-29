@@ -11,12 +11,17 @@ const driverSchema = new mongoose.Schema({
     email:{
         type:String,
         required:true,
-        unique:true
+        unique:true,
+        lowercase: true,
+        trim: true,
+        match: [/^\S+@\S+\.\S+$/, "Please use a valid email address"]
     },
 
     phone:{
         type:String,
-        required:true
+        required:true,
+        trim: true,
+        match: [/^\d{10}$/, "Phone number must be exactly 10 digits"]
     },
 
     licenseNumber:{
