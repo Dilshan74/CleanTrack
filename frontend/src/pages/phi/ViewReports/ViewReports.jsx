@@ -10,7 +10,7 @@ import Pagination from "../../../components/common/Pagination";
 import SearchBar from "../../../components/common/SearchBar";
 import Table from "../../../components/common/Table";
 import { Select } from "../../../components/common/Field";
-import { PHI_REPORTS, RISK_TINT } from "../../../utils/constants";
+import { PHI_REPORTS, RISK_TINT, STATUS_TINT } from "../../../utils/constants";
 import { matchesQuery, paginate, totalPages } from "../../../utils/helpers";
 
 const PER_PAGE = 5;
@@ -31,6 +31,7 @@ const RISK_OPTIONS = [
 ];
 
 export default function ViewReports() {
+  const [reports, setReports] = useState(PHI_REPORTS);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [risk, setRisk] = useState("all");
@@ -38,14 +39,21 @@ export default function ViewReports() {
 
   const filtered = useMemo(
     () =>
-      PHI_REPORTS.filter(
+      reports.filter(
         (report) =>
           matchesQuery(report, query, ["id", "name", "location"]) &&
           (status === "all" || report.status === status) &&
           (risk === "all" || report.risk === risk),
       ),
-    [query, status, risk],
+    [reports, query, status, risk],
   );
+
+  const setStatusFor = (id, nextStatus) =>
+    setReports((current) =>
+      current.map((report) =>
+        report.id === id ? { ...report, status: nextStatus } : report,
+      ),
+    );
 
   const pageCount = totalPages(filtered.length, PER_PAGE);
   const currentPage = Math.min(page, pageCount);
@@ -72,7 +80,11 @@ export default function ViewReports() {
       render: (row) => <Badge className={RISK_TINT[row.risk]}>{row.risk}</Badge>,
     },
     { key: "date", header: "Date", className: "whitespace-nowrap text-muted-foreground" },
-    { key: "status", header: "Status", className: "whitespace-nowrap" },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <Badge className={STATUS_TINT[row.status]}>{row.status}</Badge>,
+    },
     {
       key: "actions",
       header: "Actions",
@@ -87,7 +99,10 @@ export default function ViewReports() {
             variant="ghost"
             className="text-success"
             aria-label={`Accept ${row.id}`}
-            onClick={() => toast.success(`${row.id} accepted`)}
+            onClick={() => {
+              setStatusFor(row.id, "Accepted");
+              toast.success(`${row.id} accepted`);
+            }}
           >
             <Check className="h-3.5 w-3.5" />
           </Button>
@@ -96,7 +111,10 @@ export default function ViewReports() {
             variant="ghost"
             className="text-destructive"
             aria-label={`Reject ${row.id}`}
-            onClick={() => toast.error(`${row.id} rejected`)}
+            onClick={() => {
+              setStatusFor(row.id, "Rejected");
+              toast.error(`${row.id} rejected`);
+            }}
           >
             <X className="h-3.5 w-3.5" />
           </Button>

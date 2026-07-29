@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bell,
   Brain,
   FileBarChart,
   LayoutDashboard,
@@ -18,6 +19,7 @@ const items = [
   { to: "/admin/statistics", label: "Statistics", icon: BarChart3 },
   { to: "/admin/ai-accuracy", label: "AI Accuracy", icon: Brain },
   { to: "/admin/monthly-reports", label: "Monthly Reports", icon: FileBarChart },
+  { to: "/admin/notifications", label: "Notifications", icon: Bell },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

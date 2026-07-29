@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Check, MapPin, X } from "lucide-react";
 import { toast } from "sonner";
@@ -6,11 +7,17 @@ import Button from "../../../components/common/Button";
 import EmptyState from "../../../components/common/EmptyState";
 import PageHeader from "../../../components/common/PageHeader";
 import ConfidenceBar from "../../../components/ai/ConfidenceBar";
-import { DETECTED_OBJECTS, PHI_REPORTS, RISK_TINT } from "../../../utils/constants";
+import {
+  DETECTED_OBJECTS,
+  PHI_REPORTS,
+  RISK_TINT,
+  STATUS_TINT,
+} from "../../../utils/constants";
 
 export default function ReportDetails() {
   const { id } = useParams();
   const report = PHI_REPORTS.find((item) => item.id === id);
+  const [status, setStatus] = useState(report?.status);
 
   if (!report) {
     return (
@@ -45,7 +52,7 @@ export default function ReportDetails() {
           </div>
           <div className="flex flex-wrap items-center gap-2 p-5">
             <Badge className={RISK_TINT[report.risk]}>{report.risk} risk</Badge>
-            <Badge>{report.status}</Badge>
+            <Badge className={STATUS_TINT[status]}>{status}</Badge>
             <Badge>{report.date}</Badge>
           </div>
         </div>
@@ -63,10 +70,21 @@ export default function ReportDetails() {
           <div className="soft-shadow rounded-2xl border border-border bg-card p-5">
             <h3 className="mb-3 font-semibold">Actions</h3>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => toast.success(`${report.id} accepted`)}>
+              <Button
+                onClick={() => {
+                  setStatus("Accepted");
+                  toast.success(`${report.id} accepted`);
+                }}
+              >
                 <Check className="h-4 w-4" /> Accept
               </Button>
-              <Button variant="destructive" onClick={() => toast.error(`${report.id} rejected`)}>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setStatus("Rejected");
+                  toast.error(`${report.id} rejected`);
+                }}
+              >
                 <X className="h-4 w-4" /> Reject
               </Button>
               <Button as={Link} to="/phi/visits" variant="outline">
