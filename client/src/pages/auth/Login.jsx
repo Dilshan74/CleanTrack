@@ -70,6 +70,12 @@ export default function Login() {
       // Enforce portal access:
       // Admin and Driver portals are restricted — only the correct role may enter.
       // The Resident tab is open to any authenticated user (redirects to their portal).
+      if (selectedPortal === "user" && user.role !== "user") {
+        setServerError(
+          "Access denied. This portal is for residents only."
+        );
+        return;
+      }
       if (selectedPortal === "admin" && user.role !== "admin") {
         setServerError(
           "Access denied. This portal is for administrators only."
@@ -190,12 +196,14 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link to="/register" className="text-primary font-medium">
-            Create one
-          </Link>
-        </p>
+        {selectedPortal === "user" && (
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link to="/register" className="text-primary font-medium">
+              Create one
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

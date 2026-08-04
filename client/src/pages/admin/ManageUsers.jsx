@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Trash2 } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
@@ -50,6 +50,17 @@ export default function ManageUsers() {
       setError(err?.response?.data?.message || err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteUser(user) {
+    if (!window.confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
+    try {
+      await adminService.deleteUser(user._id);
+      setUsers(null);
+      adminService.getUsers().then(setUsers);
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to delete user.");
     }
   }
 
@@ -113,7 +124,18 @@ export default function ManageUsers() {
                     <td className="px-4 py-3">
                       <span className={`text-xs rounded-full px-2 py-0.5 ${u.status === "Active" ? "bg-success/15 text-success" : "bg-destructive/10 text-destructive"}`}>{u.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-right"><button className="text-sm text-primary">Edit</button></td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center gap-3">
+                        <button className="text-sm text-primary">Edit</button>
+                        <button
+                          onClick={() => handleDeleteUser(u)}
+                          className="text-destructive hover:text-destructive/80"
+                          title="Delete user"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

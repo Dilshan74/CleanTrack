@@ -1,13 +1,66 @@
 const Driver = require("../models/driver.js");
 const Truck = require("../models/truck.js");
 const Route = require("../models/route.js");
+const User = require("../models/user.js");
+const bcrypt = require("bcryptjs");
 const CollectionHistory = require("../models/collectionHistory.js");
 const Notification = require("../models/notification.js");
 
 // Add Driver
 exports.addDriver = async (req, res) => {
     try {
-        const driver = await Driver.create(req.body);
+        const { vehicleNumber, password, name, email, phone, licenseNumber, assignedRoute } = req.body;
+
+        if (!password) {
+            return res.status(400).json({ success: false, message: "Password is required" });
+        }
+
+        // Check if a User account already exists with this email
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: "Email already registered" });
+        }
+
+        // Validate truck availability
+        if (vehicleNumber) {
+            const truck = await Truck.findById(vehicleNumber);
+            if (!truck) {
+                return res.status(404).json({ success: false, message: "Truck not found" });
+            }
+            if (truck.assignedDriver) {
+                return res.status(400).json({ success: false, message: "This truck is already assigned to another driver!" });
+            }
+        }
+
+        // Create User account so the driver can log in
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userAccount = await User.create({
+            fullName: name,
+            email,
+            password: hashedPassword,
+            phone,
+            address: "Driver",
+            role: "driver"
+        });
+
+        // Create the Driver profile
+        let driver;
+        try {
+            driver = await Driver.create({
+                name, email, phone, licenseNumber,
+                vehicleNumber: vehicleNumber || null,
+                assignedRoute: assignedRoute || null
+            });
+        } catch (driverErr) {
+            // Roll back user account if driver creation fails
+            await User.findByIdAndDelete(userAccount._id);
+            throw driverErr;
+        }
+
+        if (vehicleNumber) {
+            await Truck.findByIdAndUpdate(vehicleNumber, { assignedDriver: driver._id });
+        }
+
         res.status(201).json({
             success: true,
             message: "Driver added successfully",
@@ -68,6 +121,14 @@ exports.updateDriver = async (req, res) => {
 // Delete Driver
 exports.deleteDriver = async (req, res) => {
     try {
+        const driver = await Driver.findById(req.params.id);
+        if (!driver) return res.status(404).json({ success: false, message: "Driver not found" });
+
+        // Unlink from any assigned truck
+        if (driver.vehicleNumber) {
+            await Truck.findByIdAndUpdate(driver.vehicleNumber, { assignedDriver: null });
+        }
+
         await Driver.findByIdAndDelete(req.params.id);
         res.json({
             success: true,
@@ -81,18 +142,47 @@ exports.deleteDriver = async (req, res) => {
     }
 };
 
-// Assign Route
+// Assign Route and/or Truck to Driver
 exports.assignRoute = async (req, res) => {
     try {
-        const driver = await Driver.findByIdAndUpdate(
-            req.params.id,
-            { assignedRoute: req.body.route },
-            { returnDocument: "after" }
-        );
+        const { route, vehicleNumber } = req.body;
+        const driverId = req.params.id;
+
+        const driver = await Driver.findById(driverId);
+        if (!driver) return res.status(404).json({ success: false, message: "Driver not found" });
+
+        // Handle truck assignment with conflict check
+        if (vehicleNumber !== undefined) {
+            if (vehicleNumber) {
+                const truck = await Truck.findById(vehicleNumber);
+                if (!truck) return res.status(404).json({ success: false, message: "Truck not found" });
+                if (truck.assignedDriver && truck.assignedDriver.toString() !== driverId) {
+                    return res.status(400).json({ success: false, message: "This truck is already assigned to another driver!" });
+                }
+                // Unlink old truck if switching
+                if (driver.vehicleNumber && driver.vehicleNumber.toString() !== vehicleNumber) {
+                    await Truck.findByIdAndUpdate(driver.vehicleNumber, { assignedDriver: null });
+                }
+                await Truck.findByIdAndUpdate(vehicleNumber, { assignedDriver: driverId });
+            } else {
+                // Unassigning truck
+                if (driver.vehicleNumber) {
+                    await Truck.findByIdAndUpdate(driver.vehicleNumber, { assignedDriver: null });
+                }
+            }
+        }
+
+        const updateFields = {};
+        if (route !== undefined) updateFields.assignedRoute = route || null;
+        if (vehicleNumber !== undefined) updateFields.vehicleNumber = vehicleNumber || null;
+
+        const updated = await Driver.findByIdAndUpdate(driverId, updateFields, { new: true })
+            .populate("assignedRoute vehicleNumber");
+
         res.json({
             success: true,
-            message: "Route assigned successfully",
-            driver
+            message: "Driver updated successfully",
+            driver: updated
         });
     } catch (error) {
         res.status(500).json({

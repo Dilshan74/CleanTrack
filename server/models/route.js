@@ -1,6 +1,18 @@
 const mongoose = require("mongoose");
 
 const areaSchema = new mongoose.Schema({
+    province: {
+        type: String,
+        required: true
+    },
+    district: {
+        type: String,
+        required: true
+    },
+    municipalCouncil: {
+        type: String,
+        required: true
+    },
     areaName: {
         type: String,
         required: true

@@ -106,15 +106,22 @@ export function getRoutes() {
   return tryLive(
     async () => {
       const { data } = await api.get("/admin/routes");
-      return (data.routes || []).map((r) => ({
-        _id: r._id,
-        id: r.routeName || r._id,
-        zone: r.areas?.map((a) => a.areaName).join(", ") || "—",
-        stops: r.areas?.length || 0,
-        days: r.collectionTime || "—",
-        driver: r.assignedDriver?.name || "Unassigned",
-        truck: "—",
-      }));
+      return (data.routes || []).map((r) => {
+        const primaryArea = r.areas?.[0] || {};
+        const zoneLabel = primaryArea.municipalCouncil
+          ? `${primaryArea.municipalCouncil}, ${primaryArea.district}`
+          : r.areas?.map((a) => a.areaName).join(", ") || "—";
+
+        return {
+          _id: r._id,
+          id: r.routeName || r._id,
+          zone: zoneLabel,
+          stops: r.areas?.length || 0,
+          days: r.collectionTime || "—",
+          driver: r.assignedDriver?.name || "Unassigned",
+          truck: "—",
+        };
+      });
     },
     () => [
       { id: "Route A", zone: "Elm District", stops: 42, days: "Mon · Wed · Fri", driver: "Sam Carter", truck: "TRK-07" },
@@ -216,13 +223,33 @@ export async function addUser(payload) {
   return data;
 }
 
+export async function deleteUser(id) {
+  const { data } = await api.delete(`/admin/users/${id}`);
+  return data;
+}
+
 export async function addDriver(payload) {
   const { data } = await api.post("/admin/drivers", payload);
   return data;
 }
 
+export async function deleteDriver(id) {
+  const { data } = await api.delete(`/admin/drivers/${id}`);
+  return data;
+}
+
+export async function assignDriver(id, payload) {
+  const { data } = await api.put(`/admin/drivers/assign/${id}`, payload);
+  return data;
+}
+
 export async function addTruck(payload) {
   const { data } = await api.post("/admin/trucks", payload);
+  return data;
+}
+
+export async function deleteTruck(id) {
+  const { data } = await api.delete(`/admin/trucks/${id}`);
   return data;
 }
 
@@ -241,7 +268,11 @@ export default {
   getReports,
   getNotifications,
   addUser,
+  deleteUser,
   addDriver,
+  deleteDriver,
+  assignDriver,
   addTruck,
+  deleteTruck,
   addRoute,
 };

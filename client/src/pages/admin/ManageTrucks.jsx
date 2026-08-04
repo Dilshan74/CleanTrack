@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Fuel } from "lucide-react";
+import { Plus, Fuel, Trash2 } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
@@ -48,6 +48,17 @@ export default function ManageTrucks() {
     }
   }
 
+  async function handleDeleteTruck(truck) {
+    if (!window.confirm(`Delete truck "${truck.plate}"? This cannot be undone.`)) return;
+    try {
+      await adminService.deleteTruck(truck._id);
+      setTrucks(null);
+      adminService.getTrucks().then(setTrucks);
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to delete truck.");
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -74,7 +85,16 @@ export default function ManageTrucks() {
               <div key={t.id || t._id} className="rounded-xl border bg-card p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="font-semibold">{t.id}</div>
-                  <span className={`text-xs rounded-full px-2 py-0.5 ${tone[t.status] || tone.Idle}`}>{t.status}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs rounded-full px-2 py-0.5 ${tone[t.status] || tone.Idle}`}>{t.status}</span>
+                    <button
+                      onClick={() => handleDeleteTruck(t)}
+                      className="text-destructive hover:text-destructive/80"
+                      title="Delete truck"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><div className="text-xs text-muted-foreground">Plate</div><div className="font-medium">{t.plate}</div></div>

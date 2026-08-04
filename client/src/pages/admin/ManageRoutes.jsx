@@ -4,6 +4,43 @@ import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
 
+const LOCATION_DATA = {
+  Western: {
+    Colombo: ["Colombo", "Dehiwala-Mount Lavinia", "Sri Jayawardenepura Kotte", "Kaduwela", "Moratuwa"],
+    Gampaha: ["Negombo", "Gampaha"],
+  },
+  "North Western": {
+    Kurunegala: ["Kurunegala"],
+  },
+  Central: {
+    Kandy: ["Kandy"],
+    Matale: ["Matale", "Dambulla"],
+    "Nuwara Eliya": ["Nuwara Eliya"],
+  },
+  Uva: {
+    Badulla: ["Badulla", "Bandarawela"],
+  },
+  Southern: {
+    Galle: ["Galle"],
+    Matara: ["Matara"],
+    Hambantota: ["Hambantota"],
+  },
+  Sabaragamuwa: {
+    Ratnapura: ["Ratnapura"],
+  },
+  "North Central": {
+    Anuradhapura: ["Anuradhapura"],
+    Polonnaruwa: ["Polonnaruwa"],
+  },
+  Northern: {
+    Jaffna: ["Jaffna"],
+  },
+  Eastern: {
+    Batticaloa: ["Batticaloa"],
+    Ampara: ["Kalmunai", "Akkaraipattu"],
+  },
+};
+
 export default function ManageRoutes() {
   const [routes, setRoutes] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -12,14 +49,36 @@ export default function ManageRoutes() {
   const [form, setForm] = useState({
     routeName: "",
     collectionTime: "",
+    province: "Western",
+    district: "Colombo",
+    municipalCouncil: "Colombo",
   });
 
   useEffect(() => {
     adminService.getRoutes().then(setRoutes);
   }, []);
 
+  const provinceOptions = Object.keys(LOCATION_DATA);
+  const districtOptions = LOCATION_DATA[form.province] ? Object.keys(LOCATION_DATA[form.province]) : [];
+  const municipalOptions = LOCATION_DATA[form.province]?.[form.district] || [];
+
   function updateForm(key, value) {
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+
+      if (key === "province") {
+        const nextDistricts = Object.keys(LOCATION_DATA[value] || {});
+        const nextDistrict = nextDistricts[0] || "";
+        next.district = nextDistrict;
+        next.municipalCouncil = LOCATION_DATA[value]?.[nextDistrict]?.[0] || "";
+      }
+
+      if (key === "district") {
+        next.municipalCouncil = LOCATION_DATA[next.province]?.[value]?.[0] || "";
+      }
+
+      return next;
+    });
   }
 
   async function handleAddRoute(e) {
@@ -30,12 +89,25 @@ export default function ManageRoutes() {
       await adminService.addRoute({
         routeName: form.routeName,
         collectionTime: form.collectionTime,
-        areas: [],
+        areas: [
+          {
+            province: form.province,
+            district: form.district,
+            municipalCouncil: form.municipalCouncil,
+            areaName: form.municipalCouncil,
+          },
+        ],
       });
       setRoutes(null);
       adminService.getRoutes().then(setRoutes);
       setShowAddModal(false);
-      setForm({ routeName: "", collectionTime: "" });
+      setForm({
+        routeName: "",
+        collectionTime: "",
+        province: "Western",
+        district: "Colombo",
+        municipalCouncil: "Colombo",
+      });
     } catch (err) {
       setError(err?.response?.data?.message || err.message);
     } finally {
@@ -97,6 +169,32 @@ export default function ManageRoutes() {
           <div className="space-y-1">
             <label className="text-sm font-medium">Route Name</label>
             <input required value={form.routeName} onChange={(e) => updateForm("routeName", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Province</label>
+              <select required value={form.province} onChange={(e) => updateForm("province", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+                {provinceOptions.map((province) => (
+                  <option key={province} value={province}>{province}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">District</label>
+              <select required value={form.district} onChange={(e) => updateForm("district", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+                {districtOptions.map((district) => (
+                  <option key={district} value={district}>{district}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Municipal Council</label>
+              <select required value={form.municipalCouncil} onChange={(e) => updateForm("municipalCouncil", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+                {municipalOptions.map((council) => (
+                  <option key={council} value={council}>{council}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium">Collection Time/Days</label>
