@@ -28,15 +28,24 @@ export default function UpdateCollectionStatus() {
 
   if (!stopsData) return <Loader label="Loading stops…" />;
 
-  const { routeName, stops } = stopsData;
+  const { routeName, days, stops } = stopsData;
   const done = stops.filter((s) => s.status !== "Pending").length;
+
+  const todayName = new Date().toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+  const isActiveDay = days ? days.toLowerCase().includes(todayName) : true;
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Update Collection Status</h1>
         <p className="text-sm font-semibold text-primary mt-1">Route: {routeName}</p>
-        <p className="text-muted-foreground mt-0.5">{done} of {stops.length} stops updated. Mark each stop as you go.</p>
+        {days && (
+          <p className="text-xs font-medium text-muted-foreground mt-0.5">Schedule: {days}</p>
+        )}
+        {!isActiveDay && (
+          <p className="text-xs font-semibold text-destructive mt-1">Status updates are inactive today (not a scheduled collection day).</p>
+        )}
+        <p className="text-muted-foreground mt-1">{done} of {stops.length} stops updated. Mark each stop as you go.</p>
       </div>
 
       {stops.length === 0 ? (
@@ -48,11 +57,12 @@ export default function UpdateCollectionStatus() {
           {stops.map((s) => (
             <div key={s.id || s.seq} className="rounded-xl border bg-card p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="font-medium">Stop #{s.seq} · {s.addr}</div>
+                <div className="font-medium">Stop #{s.seq}</div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs text-muted-foreground">Waste Type:</span>
                   <select
                     value={s.type || "General waste"}
+                    disabled={!isActiveDay}
                     onChange={(e) => {
                       const newType = e.target.value;
                       setStopsData((prev) => ({
@@ -60,7 +70,7 @@ export default function UpdateCollectionStatus() {
                         stops: prev.stops.map((item) => item.id === s.id ? { ...item, type: newType } : item),
                       }));
                     }}
-                    className="text-xs rounded border border-input bg-background px-2 py-1 outline-none focus:ring-1 focus:ring-ring"
+                    className="text-xs rounded border border-input bg-background px-2 py-1 outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
                   >
                     <option value="General waste">General waste</option>
                     <option value="Recyclables">Recyclables</option>
@@ -71,13 +81,25 @@ export default function UpdateCollectionStatus() {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`mr-2 text-xs rounded-full px-2 py-0.5 ${badge[s.status] || badge.Pending}`}>{s.status}</span>
-                <button onClick={() => setStatus(s.id, "Collected", s.type)} className="inline-flex items-center gap-1 rounded-lg bg-success px-3 py-1.5 text-sm text-success-foreground hover:opacity-90">
+                <button
+                  disabled={!isActiveDay}
+                  onClick={() => setStatus(s.id, "Collected", s.type)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-success px-3 py-1.5 text-sm text-success-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <CheckCircle2 className="h-4 w-4" /> Collected
                 </button>
-                <button onClick={() => setStatus(s.id, "Issue", s.type)} className="inline-flex items-center gap-1 rounded-lg bg-warning px-3 py-1.5 text-sm text-warning-foreground hover:opacity-90">
+                <button
+                  disabled={!isActiveDay}
+                  onClick={() => setStatus(s.id, "Issue", s.type)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-warning px-3 py-1.5 text-sm text-warning-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <AlertCircle className="h-4 w-4" /> Issue
                 </button>
-                <button onClick={() => setStatus(s.id, "Missed", s.type)} className="inline-flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-sm text-destructive-foreground hover:opacity-90">
+                <button
+                  disabled={!isActiveDay}
+                  onClick={() => setStatus(s.id, "Missed", s.type)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-sm text-destructive-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <XCircle className="h-4 w-4" /> Missed
                 </button>
               </div>

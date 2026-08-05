@@ -71,6 +71,7 @@ export function getStops() {
       const areas = data.route?.areas || [];
       return {
         routeName: data.route?.routeName || "No route assigned",
+        days: data.route?.collectionTime || "",
         stops: areas.map((a, i) => ({
           id: a._id,
           seq: i + 1,
