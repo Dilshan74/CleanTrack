@@ -32,7 +32,6 @@ export default function TodaysSchedule() {
                 <th className="px-4 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Address</th>
                 <th className="px-4 py-3 font-medium">Waste type</th>
-                <th className="px-4 py-3 font-medium">ETA</th>
                 <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
@@ -42,7 +41,6 @@ export default function TodaysSchedule() {
                   <td className="px-4 py-3 font-medium">{s.seq}</td>
                   <td className="px-4 py-3">{s.addr}</td>
                   <td className="px-4 py-3">{s.type}</td>
-                  <td className="px-4 py-3">{s.eta}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs rounded-full px-2 py-0.5 ${tone[s.status] || tone.Pending}`}>{s.status}</span>
                   </td>

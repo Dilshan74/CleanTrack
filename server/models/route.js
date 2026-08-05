@@ -21,6 +21,10 @@ const areaSchema = new mongoose.Schema({
         type: String,
         enum: ["Pending", "Collected", "Missed"],
         default: "Pending"
+    },
+    wasteType: {
+        type: String,
+        default: "General waste"
     }
 });
 

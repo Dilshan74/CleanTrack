@@ -1,5 +1,7 @@
 const dotenv = require("dotenv");
-dotenv.config();
+const path = require("path");
+
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
@@ -7,7 +9,7 @@ const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const userRoutes = require("./routes/userRoutes");
 const driverRoutes = require("./routes/driverRoutes");
-const routeRoutes = require("./routes/routeroutes");
+const routeRoutes = require("./routes/routeRoutes");
 const requestRoutes = require("./routes/requestRoutes");
 const notificationRoutes = require("./routes/notificationRoute");
 const historyRoutes = require("./routes/historyRoutes");

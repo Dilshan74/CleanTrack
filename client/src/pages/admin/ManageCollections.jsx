@@ -6,9 +6,10 @@ const tone = {
   Completed: "bg-success/15 text-success",
   "In progress": "bg-warning/20 text-warning-foreground",
   Scheduled: "bg-muted text-muted-foreground",
+  Missed: "bg-destructive/10 text-destructive",
 };
 
-const filters = ["All", "Scheduled", "In progress", "Completed"];
+const filters = ["All", "Scheduled", "In progress", "Completed", "Missed"];
 
 export default function ManageCollections() {
   const [items, setItems] = useState(null);
@@ -49,7 +50,7 @@ export default function ManageCollections() {
           <table className="w-full text-sm">
             <thead className="bg-muted text-muted-foreground text-left">
               <tr>
-                <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Driver Name</th>
                 <th className="px-4 py-3 font-medium">Route</th>
                 <th className="px-4 py-3 font-medium">Zone</th>
                 <th className="px-4 py-3 font-medium">Date</th>
@@ -60,7 +61,7 @@ export default function ManageCollections() {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id} className="border-t">
-                  <td className="px-4 py-3 font-medium">{c.id}</td>
+                  <td className="px-4 py-3 font-medium">{c.driver || "—"}</td>
                   <td className="px-4 py-3">{c.route}</td>
                   <td className="px-4 py-3">{c.zone}</td>
                   <td className="px-4 py-3">{c.date}</td>

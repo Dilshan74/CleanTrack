@@ -36,8 +36,10 @@ exports.getRoutes = async(req,res)=>{
 try{
 
 const routes = await Route.find()
-.populate("assignedDriver");
-
+    .populate({
+        path: "assignedDriver",
+        populate: { path: "vehicleNumber" }
+    });
 
 res.json({
 success:true,

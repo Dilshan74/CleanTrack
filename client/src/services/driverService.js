@@ -45,9 +45,10 @@ export function getTodaysSchedule() {
       // Server returns { success, route } where route.areas is the stop list
       const areas = data.route?.areas || [];
       return areas.map((a, i) => ({
+        id: a._id,
         seq: i + 1,
         addr: a.areaName || `Stop ${i + 1}`,
-        type: "General waste",
+        type: a.wasteType || "General waste",
         eta: data.route?.collectionTime || "N/A",
         status: a.status || "Pending",
       }));
@@ -64,27 +65,33 @@ export function getTodaysSchedule() {
 }
 
 export function getStops() {
-  return withFallback(
-    () => api.get("/driver/stops"),
-    () => [
-      { seq: 1, addr: "12 Oak St", type: "Recyclables", eta: "7:30 AM", status: "Collected" },
-      { seq: 2, addr: "24 Oak St", type: "General waste", eta: "7:38 AM", status: "Collected" },
-      { seq: 3, addr: "8 Maple Ave", type: "Organic waste", eta: "7:52 AM", status: "Issue" },
-      { seq: 4, addr: "42 Maple Ave", type: "Recyclables", eta: "8:05 AM", status: "Pending" },
-      { seq: 5, addr: "17 Birch Rd", type: "General waste", eta: "8:20 AM", status: "Pending" },
-      { seq: 6, addr: "38 Birch Rd", type: "Bulk pickup", eta: "8:35 AM", status: "Pending" },
-    ],
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/schedule");
+      const areas = data.route?.areas || [];
+      return {
+        routeName: data.route?.routeName || "No route assigned",
+        stops: areas.map((a, i) => ({
+          id: a._id,
+          seq: i + 1,
+          addr: a.areaName || `Stop ${i + 1}`,
+          type: a.wasteType || "General waste",
+          status: a.status || "Pending",
+        })),
+      };
+    },
+    () => ({ routeName: "", stops: [] }),
   );
 }
 
-export async function updateStopStatus(seq, status) {
+export async function updateStopStatus(id, status, wasteType) {
   try {
     // Server expects PUT /driver/update-status/:id
-    const { data } = await api.put(`/driver/update-status/${seq}`, { status });
+    const { data } = await api.put(`/driver/update-status/${id}`, { status, wasteType });
     return data;
   } catch {
     await delay(150);
-    return { seq, status };
+    return { id, status, wasteType };
   }
 }
 

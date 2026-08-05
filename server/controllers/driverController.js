@@ -32,6 +32,17 @@ exports.addDriver = async (req, res) => {
             }
         }
 
+        // Validate route availability
+        if (assignedRoute) {
+            const routeDoc = await Route.findById(assignedRoute);
+            if (!routeDoc) {
+                return res.status(404).json({ success: false, message: "Route not found" });
+            }
+            if (routeDoc.assignedDriver) {
+                return res.status(400).json({ success: false, message: "This route is already assigned to another driver!" });
+            }
+        }
+
         // Create User account so the driver can log in
         const hashedPassword = await bcrypt.hash(password, 10);
         const userAccount = await User.create({
@@ -59,6 +70,10 @@ exports.addDriver = async (req, res) => {
 
         if (vehicleNumber) {
             await Truck.findByIdAndUpdate(vehicleNumber, { assignedDriver: driver._id });
+        }
+
+        if (assignedRoute) {
+            await Route.findByIdAndUpdate(assignedRoute, { assignedDriver: driver._id });
         }
 
         res.status(201).json({
@@ -129,6 +144,10 @@ exports.deleteDriver = async (req, res) => {
             await Truck.findByIdAndUpdate(driver.vehicleNumber, { assignedDriver: null });
         }
 
+        if (driver.assignedRoute) {
+            await Route.findByIdAndUpdate(driver.assignedRoute, { assignedDriver: null });
+        }
+
         await Driver.findByIdAndDelete(req.params.id);
         res.json({
             success: true,
@@ -151,6 +170,17 @@ exports.assignRoute = async (req, res) => {
         const driver = await Driver.findById(driverId);
         if (!driver) return res.status(404).json({ success: false, message: "Driver not found" });
 
+        const oldRouteId = driver.assignedRoute ? driver.assignedRoute.toString() : null;
+        const newRouteId = route || null;
+
+        if (route !== undefined && route) {
+            const routeDoc = await Route.findById(route);
+            if (!routeDoc) return res.status(404).json({ success: false, message: "Route not found" });
+            if (routeDoc.assignedDriver && routeDoc.assignedDriver.toString() !== driverId) {
+                return res.status(400).json({ success: false, message: "This route is already assigned to another driver!" });
+            }
+        }
+
         // Handle truck assignment with conflict check
         if (vehicleNumber !== undefined) {
             if (vehicleNumber) {
@@ -169,6 +199,18 @@ exports.assignRoute = async (req, res) => {
                 if (driver.vehicleNumber) {
                     await Truck.findByIdAndUpdate(driver.vehicleNumber, { assignedDriver: null });
                 }
+            }
+        }
+
+        if (route !== undefined) {
+            if (oldRouteId && oldRouteId !== newRouteId) {
+                await Route.findByIdAndUpdate(oldRouteId, { assignedDriver: null });
+            }
+            if (newRouteId && oldRouteId !== newRouteId) {
+                await Route.findByIdAndUpdate(newRouteId, { assignedDriver: driverId });
+            }
+            if (!newRouteId && oldRouteId) {
+                // already cleared above
             }
         }
 
@@ -230,7 +272,7 @@ exports.updateCollectionStatus = async (req, res) => {
     try {
         const areaId = req.params.id || req.body.areaId;
         const routeId = req.driverProfile.assignedRoute || req.body.routeId;
-        const status = req.body.status;
+        const { status, wasteType } = req.body;
         
         if (!routeId) {
             return res.status(400).json({ success: false, message: "No route assigned to update" });
@@ -246,7 +288,8 @@ exports.updateCollectionStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: "Area not found in this route" });
         }
 
-        area.status = status; // "Pending", "Collected", or "Missed"
+        if (status) area.status = status; // "Pending", "Collected", or "Missed"
+        if (wasteType) area.wasteType = wasteType;
         await route.save();
 
         res.json({

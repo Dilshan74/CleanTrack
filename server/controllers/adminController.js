@@ -61,9 +61,8 @@ const getOverview = async (req, res) => {
     }
 };
 
-// ============================================================
 // GET /api/admin/dashboard  — alias kept for backward compat
-// ============================================================
+
 const adminDashboard = async (req, res) => {
     try {
         const users = await User.countDocuments({ role: "user" });
@@ -97,9 +96,9 @@ const adminDashboard = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // Manage Users
-// ============================================================
+
 const getAllUsers = async (req, res) => {
     try {
         const users = await User.find({ role: "user" }).select("-password");
@@ -142,9 +141,9 @@ const deleteUser = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // Monitor Collection Progress
-// ============================================================
+
 const getCollectionProgress = async (req, res) => {
     try {
         const routes = await Route.find();
@@ -170,9 +169,9 @@ const getCollectionProgress = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // GET /api/admin/collections — recent collection history
-// ============================================================
+
 const getCollections = async (req, res) => {
     try {
         const history = await CollectionHistory.find()
@@ -190,9 +189,9 @@ const getCollections = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // GET /api/admin/reports — aggregate statistics
-// ============================================================
+
 const getReports = async (req, res) => {
     try {
         const [totalHistory, pendingRequests, allRequests] = await Promise.all([
@@ -238,9 +237,9 @@ const getReports = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // Handle Complaints (requests from users)
-// ============================================================
+
 const getComplaints = async (req, res) => {
     try {
         const complaints = await CollectionRequest.find().populate("user", "fullName email");
@@ -269,9 +268,9 @@ const updateComplaintStatus = async (req, res) => {
     }
 };
 
-// ============================================================
+
 // GET /api/admin/notifications — all system notifications
-// ============================================================
+
 const getNotificationsForAdmin = async (req, res) => {
     try {
         const notifications = await Notification.find()

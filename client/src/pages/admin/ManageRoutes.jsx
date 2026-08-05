@@ -44,6 +44,7 @@ const LOCATION_DATA = {
 export default function ManageRoutes() {
   const [routes, setRoutes] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingRoute, setEditingRoute] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -54,8 +55,13 @@ export default function ManageRoutes() {
     municipalCouncil: "Colombo",
   });
 
-  useEffect(() => {
+  function refreshRoutes() {
+    setRoutes(null);
     adminService.getRoutes().then(setRoutes);
+  }
+
+  useEffect(() => {
+    refreshRoutes();
   }, []);
 
   const provinceOptions = Object.keys(LOCATION_DATA);
@@ -86,7 +92,7 @@ export default function ManageRoutes() {
     setSaving(true);
     setError("");
     try {
-      await adminService.addRoute({
+      const payload = {
         routeName: form.routeName,
         collectionTime: form.collectionTime,
         areas: [
@@ -97,10 +103,18 @@ export default function ManageRoutes() {
             areaName: form.municipalCouncil,
           },
         ],
-      });
+      };
+
+      if (editingRoute) {
+        await adminService.updateRoute(editingRoute._id, payload);
+      } else {
+        await adminService.addRoute(payload);
+      }
+
       setRoutes(null);
       adminService.getRoutes().then(setRoutes);
       setShowAddModal(false);
+      setEditingRoute(null);
       setForm({
         routeName: "",
         collectionTime: "",
@@ -115,6 +129,16 @@ export default function ManageRoutes() {
     }
   }
 
+  async function handleDeleteRoute(r) {
+    if (!window.confirm(`Delete route "${r.routeName || r.id}"? This cannot be undone.`)) return;
+    try {
+      await adminService.deleteRoute(r._id);
+      refreshRoutes();
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to delete route.");
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -123,7 +147,18 @@ export default function ManageRoutes() {
           <p className="text-muted-foreground">{routes ? routes.length : "..."} active routes.</p>
         </div>
         <button 
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setEditingRoute(null);
+            setShowAddModal(true);
+            setError("");
+            setForm({
+              routeName: "",
+              collectionTime: "",
+              province: "Western",
+              district: "Colombo",
+              municipalCouncil: "Colombo",
+            });
+          }}
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
           <Plus className="h-4 w-4" /> New route
@@ -145,11 +180,36 @@ export default function ManageRoutes() {
                       <MapPin className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="font-semibold">{r.id}</div>
+                      <div className="font-semibold">{r.routeName || r.id}</div>
                       <div className="text-xs text-muted-foreground">{r.zone}</div>
                     </div>
                   </div>
-                  <button className="text-sm text-primary">Edit</button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        const area = (r.areas && r.areas[0]) || {};
+                        setEditingRoute(r);
+                        setForm({
+                          routeName: r.routeName || r.id,
+                          collectionTime: r.days,
+                          province: area.province || "Western",
+                          district: area.district || "Colombo",
+                          municipalCouncil: area.municipalCouncil || area.areaName || "Colombo",
+                        });
+                        setError("");
+                        setShowAddModal(true);
+                      }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRoute(r)}
+                      className="text-sm text-destructive hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><div className="text-xs text-muted-foreground">Stops</div><div className="font-medium">{r.stops}</div></div>
@@ -163,7 +223,7 @@ export default function ManageRoutes() {
         </div>
       )}
 
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Route">
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={editingRoute ? "Edit Route" : "New Route"}>
         <form onSubmit={handleAddRoute} className="space-y-4">
           {error && <div className="text-sm text-destructive bg-destructive/10 p-2 rounded-lg">{error}</div>}
           <div className="space-y-1">
@@ -200,10 +260,13 @@ export default function ManageRoutes() {
             <label className="text-sm font-medium">Collection Time/Days</label>
             <input required value={form.collectionTime} onChange={(e) => updateForm("collectionTime", e.target.value)} placeholder="e.g. Mon, Wed 7:30 AM" className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setShowAddModal(false)} className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancel</button>
+          <div className="flex justify-between gap-2 pt-2">
+            <button type="button" onClick={() => {
+              setShowAddModal(false);
+              setEditingRoute(null);
+            }} className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancel</button>
             <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60">
-              {saving ? "Saving..." : "Create Route"}
+              {saving ? "Saving..." : editingRoute ? "Update Route" : "Create Route"}
             </button>
           </div>
         </form>
@@ -211,3 +274,4 @@ export default function ManageRoutes() {
     </div>
   );
 }
+

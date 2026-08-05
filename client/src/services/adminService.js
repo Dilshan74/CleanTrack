@@ -119,7 +119,7 @@ export function getRoutes() {
           stops: r.areas?.length || 0,
           days: r.collectionTime || "—",
           driver: r.assignedDriver?.name || "Unassigned",
-          truck: "—",
+          truck: r.assignedDriver?.vehicleNumber?.plateNumber || "—",
         };
       });
     },
@@ -136,8 +136,9 @@ export function getCollections() {
   return tryLive(
     async () => {
       const { data } = await api.get("/admin/collections");
-      const historyItems = (data.history || []).map((h) => ({
+       const historyItems = (data.history || []).map((h) => ({
         id: h._id,
+        driver: h.driver?.name || "—",
         route: h.route?.routeName || "—",
         zone: "—",
         date: h.createdAt
@@ -146,14 +147,28 @@ export function getCollections() {
         tons: 0,
         status: "Completed",
       }));
-      const routeItems = (data.routes || []).map((r) => ({
-        id: r._id,
-        route: r.routeName || "—",
-        zone: r.areas?.slice(0, 2).map((a) => a.areaName).join(", ") || "—",
-        date: "Today",
-        tons: 0,
-        status: r.status || "Active",
-      }));
+      const routeItems = (data.routes || []).map((r) => {
+        let status = "Scheduled";
+        const total = r.areas?.length || 0;
+        const missedCount = r.areas?.filter((a) => a.status === "Missed").length || 0;
+        const completedCount = r.areas?.filter((a) => a.status === "Collected" || a.status === "Missed").length || 0;
+        
+        if (r.status === "Completed" || (total > 0 && completedCount === total)) {
+          status = missedCount > 0 ? "Missed" : "Completed";
+        } else if (completedCount > 0) {
+          status = "In progress";
+        }
+        
+        return {
+          id: r._id,
+          driver: r.assignedDriver?.name || "Unassigned",
+          route: r.routeName || "—",
+          zone: r.areas?.map((a) => a.areaName).join(", ") || "—",
+          date: "Today",
+          tons: 0,
+          status,
+        };
+      });
       return [...historyItems, ...routeItems].slice(0, 20);
     },
     () => [
@@ -258,6 +273,16 @@ export async function addRoute(payload) {
   return data;
 }
 
+export async function updateRoute(id, payload) {
+  const { data } = await api.put(`/admin/routes/${id}`, payload);
+  return data;
+}
+
+export async function deleteRoute(id) {
+  const { data } = await api.delete(`/admin/routes/${id}`);
+  return data;
+}
+
 export default {
   getOverview,
   getUsers,
@@ -275,4 +300,6 @@ export default {
   addTruck,
   deleteTruck,
   addRoute,
+  updateRoute,
+  deleteRoute,
 };
