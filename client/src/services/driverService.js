@@ -51,15 +51,17 @@ export function getTodaysSchedule() {
         type: a.wasteType || "General waste",
         eta: data.route?.collectionTime || "N/A",
         status: a.status || "Pending",
+        lat: a.lat || 6.9271 + (i + 1) * 0.0015,
+        lng: a.lng || 79.8612 + (i + 1) * 0.0012,
       }));
     },
     () => [
-      { seq: 1, addr: "12 Oak St", type: "Recyclables", eta: "7:30 AM", status: "Done" },
-      { seq: 2, addr: "24 Oak St", type: "General waste", eta: "7:38 AM", status: "Done" },
-      { seq: 3, addr: "8 Maple Ave", type: "Organic waste", eta: "7:52 AM", status: "Done" },
-      { seq: 4, addr: "42 Maple Ave", type: "Recyclables", eta: "8:05 AM", status: "In progress" },
-      { seq: 5, addr: "17 Birch Rd", type: "General waste", eta: "8:20 AM", status: "Pending" },
-      { seq: 6, addr: "38 Birch Rd", type: "Bulk pickup", eta: "8:35 AM", status: "Pending" },
+      { seq: 1, addr: "12 Oak St", type: "Recyclables", eta: "7:30 AM", status: "Collected", lat: 6.9286, lng: 79.8624 },
+      { seq: 2, addr: "24 Oak St", type: "General waste", eta: "7:38 AM", status: "Collected", lat: 6.9301, lng: 79.8636 },
+      { seq: 3, addr: "8 Maple Ave", type: "Organic waste", eta: "7:52 AM", status: "Pending", lat: 6.9316, lng: 79.8648 },
+      { seq: 4, addr: "42 Maple Ave", type: "Recyclables", eta: "8:05 AM", status: "Pending", lat: 6.9331, lng: 79.8660 },
+      { seq: 5, addr: "17 Birch Rd", type: "General waste", eta: "8:20 AM", status: "Pending", lat: 6.9346, lng: 79.8672 },
+      { seq: 6, addr: "38 Birch Rd", type: "Bulk pickup", eta: "8:35 AM", status: "Pending", lat: 6.9361, lng: 79.8684 },
     ],
   );
 }
@@ -78,10 +80,23 @@ export function getStops() {
           addr: a.areaName || `Stop ${i + 1}`,
           type: a.wasteType || "General waste",
           status: a.status || "Pending",
+          lat: a.lat || 6.9271 + (i + 1) * 0.0015,
+          lng: a.lng || 79.8612 + (i + 1) * 0.0012,
         })),
       };
     },
-    () => ({ routeName: "", stops: [] }),
+    () => ({
+      routeName: "Route A · Colombo Central",
+      days: "Mon, Wed, Fri",
+      stops: [
+        { id: "s1", seq: 1, addr: "12 Oak St", type: "Recyclables", status: "Collected", lat: 6.9286, lng: 79.8624 },
+        { id: "s2", seq: 2, addr: "24 Oak St", type: "General waste", status: "Collected", lat: 6.9301, lng: 79.8636 },
+        { id: "s3", seq: 3, addr: "8 Maple Ave", type: "Organic waste", status: "Pending", lat: 6.9316, lng: 79.8648 },
+        { id: "s4", seq: 4, addr: "42 Maple Ave", type: "Recyclables", status: "Pending", lat: 6.9331, lng: 79.8660 },
+        { id: "s5", seq: 5, addr: "17 Birch Rd", type: "General waste", status: "Pending", lat: 6.9346, lng: 79.8672 },
+        { id: "s6", seq: 6, addr: "38 Birch Rd", type: "Bulk pickup", status: "Pending", lat: 6.9361, lng: 79.8684 },
+      ],
+    }),
   );
 }
 

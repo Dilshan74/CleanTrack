@@ -17,6 +17,14 @@ const areaSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    lat: {
+        type: Number,
+        default: 0
+    },
+    lng: {
+        type: Number,
+        default: 0
+    },
     status: {
         type: String,
         enum: ["Pending", "Collected", "Missed"],
