@@ -181,7 +181,7 @@ const getCollections = async (req, res) => {
             .limit(50);
 
         // Also include active route statuses
-        const routes = await Route.find().populate("assignedDriver", "name").select("routeName areas status assignedDriver collectionTime");
+        const routes = await Route.find().populate("assignedDriver", "name").select("routeName areas status assignedDriver collectionTime postalCode");
 
         res.json({ success: true, history, routes });
     } catch (error) {

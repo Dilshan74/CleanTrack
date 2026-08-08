@@ -99,7 +99,7 @@ export default function ManageTrucks() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><div className="text-xs text-muted-foreground">Plate</div><div className="font-medium">{t.plate}</div></div>
                   <div><div className="text-xs text-muted-foreground">Capacity</div><div className="font-medium">{t.capacity}</div></div>
-                  <div className="col-span-2"><div className="text-xs text-muted-foreground">Driver</div><div className="font-medium">{t.driver}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Driver</div><div className="font-medium">{t.driver}</div></div>
                 </div>
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs mb-1">

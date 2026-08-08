@@ -42,15 +42,29 @@ export function getSchedule() {
   return tryLive(
     async () => {
       const { data } = await api.get("/user/schedule");
-      const requests = data.data?.scheduledRequests || [];
-      return requests.map((r) => ({
-        date: r.collectionDate
-          ? new Date(r.collectionDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-          : "—",
-        time: "7:30 AM",
-        type: r.garbageType || "General Waste",
-        status: r.status || "Pending",
-      }));
+      const items = data.data?.scheduleItems || [];
+      return items.map((r) => {
+        const timeStr = r.collectionTime || "7:30 AM";
+        const parts = timeStr.split(" ");
+        let date = "Scheduled";
+        let time = timeStr;
+        if (parts.length > 1) {
+          const rawDate = parts[0];
+          if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+            const [y, m, d] = rawDate.split("-");
+            date = `${d}/${m}/${y}`;
+          } else {
+            date = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
+          }
+          time = parts.slice(1).join(" ");
+        }
+        
+        return {
+          date: date,
+          time: time,
+          status: r.status === "Active" ? "Scheduled" : r.status,
+        };
+      });
     },
     () => [
       { date: "Mon, Jul 14", time: "7:30 AM", type: "General waste", status: "Completed" },
@@ -148,7 +162,7 @@ export function getProfile() {
         phone: u.phone,
         address: u.address,
         nationalId: "—", // not in model
-        zone: "—",       // not in model
+        postalCode: u.postalCode || "",
       };
     },
     () => ({

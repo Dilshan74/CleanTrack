@@ -49,7 +49,9 @@ export default function ManageRoutes() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     routeName: "",
-    collectionTime: "",
+    collectionDate: "",
+    collectionTimeOfDay: "",
+    postalCode: "",
     province: "Western",
     district: "Colombo",
     municipalCouncil: "Colombo",
@@ -94,7 +96,8 @@ export default function ManageRoutes() {
     try {
       const payload = {
         routeName: form.routeName,
-        collectionTime: form.collectionTime,
+        collectionTime: `${form.collectionDate} ${form.collectionTimeOfDay}`,
+        postalCode: form.postalCode,
         areas: [
           {
             province: form.province,
@@ -117,7 +120,9 @@ export default function ManageRoutes() {
       setEditingRoute(null);
       setForm({
         routeName: "",
-        collectionTime: "",
+        collectionDate: "",
+        collectionTimeOfDay: "",
+        postalCode: "",
         province: "Western",
         district: "Colombo",
         municipalCouncil: "Colombo",
@@ -153,7 +158,9 @@ export default function ManageRoutes() {
             setError("");
             setForm({
               routeName: "",
-              collectionTime: "",
+              collectionDate: "",
+              collectionTimeOfDay: "",
+              postalCode: "",
               province: "Western",
               district: "Colombo",
               municipalCouncil: "Colombo",
@@ -189,9 +196,14 @@ export default function ManageRoutes() {
                       onClick={() => {
                         const area = (r.areas && r.areas[0]) || {};
                         setEditingRoute(r);
+                        const timeParts = (r.collectionTime || "").split(" ");
+                        const cDate = timeParts[0] || "";
+                        const cTime = timeParts.slice(1).join(" ") || "";
                         setForm({
                           routeName: r.routeName || r.id,
-                          collectionTime: r.days,
+                          collectionDate: cDate,
+                          collectionTimeOfDay: cTime,
+                          postalCode: r.postalCode || "",
                           province: area.province || "Western",
                           district: area.district || "Colombo",
                           municipalCouncil: area.municipalCouncil || area.areaName || "Colombo",
@@ -213,9 +225,9 @@ export default function ManageRoutes() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><div className="text-xs text-muted-foreground">Stops</div><div className="font-medium">{r.stops}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Days</div><div className="font-medium">{r.days}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Postal Code</div><div className="font-medium">{r.postalCode || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Schedule</div><div className="font-medium">{r.collectionTime}</div></div>
                   <div><div className="text-xs text-muted-foreground">Driver</div><div className="font-medium">{r.driver}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Truck</div><div className="font-medium">{r.truck}</div></div>
                 </div>
               </div>
             ))
@@ -256,9 +268,26 @@ export default function ManageRoutes() {
               </select>
             </div>
           </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Collection Date</label>
+              <input required type="date" value={form.collectionDate} onChange={(e) => updateForm("collectionDate", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Collection Time</label>
+              <input required type="time" value={form.collectionTimeOfDay} onChange={(e) => updateForm("collectionTimeOfDay", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+          </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium">Collection Time/Days</label>
-            <input required value={form.collectionTime} onChange={(e) => updateForm("collectionTime", e.target.value)} placeholder="e.g. Mon, Wed 7:30 AM" className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+            <label className="text-sm font-medium">Postal Code</label>
+            <input
+              required
+              value={form.postalCode}
+              onChange={(e) => updateForm("postalCode", e.target.value)}
+              placeholder="e.g. 80000"
+              className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">Residents with this postal code will see this route in their schedule.</p>
           </div>
           <div className="flex justify-between gap-2 pt-2">
             <button type="button" onClick={() => {

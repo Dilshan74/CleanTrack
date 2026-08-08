@@ -21,6 +21,9 @@ const collectionHistorySchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "CollectionRoute",
         },
+        postalCode: {
+            type: String,
+        },
         garbageType: {
             type: String,
             required: true,

@@ -17,11 +17,7 @@ export function initials(name = "") {
 export function formatDate(date) {
   const d = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(d.getTime())) return String(date);
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return d.toLocaleDateString("en-GB");
 }
 
 /** Generate a short reference id, e.g. "C-204". */

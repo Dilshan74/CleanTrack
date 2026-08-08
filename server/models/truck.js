@@ -10,6 +10,10 @@ const truckSchema = new mongoose.Schema({
         type: Number, // in tons or kg
         required: true
     },
+    postalCode: {
+        type: String,
+        default: ""
+    },
     status: {
         type: String,
         enum: ["Active", "Maintenance", "Inactive"],

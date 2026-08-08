@@ -30,6 +30,11 @@ const userSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
+        postalCode: {
+            type: String,
+            trim: true,
+            default: ""
+        },
         role: {
             type: String,
             enum: ["user", "driver", "admin"],

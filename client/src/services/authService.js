@@ -27,7 +27,7 @@ export async function login({ email, password }) {
 }
 
 /** Register a new resident account. Throws on failure (e.g. email already taken). */
-export async function register({ name, email, password, phone, address, role = ROLES.USER }) {
+export async function register({ name, email, password, phone, address, postalCode = "", role = ROLES.USER }) {
   // Backend destructures `fullName`, `phone`, `address` — send with the correct keys
   const { data } = await api.post("/auth/register", {
     fullName: name,
@@ -35,6 +35,7 @@ export async function register({ name, email, password, phone, address, role = R
     password,
     phone,
     address,
+    postalCode,
     role,
   });
   // Normalize the response user object (fullName → name)

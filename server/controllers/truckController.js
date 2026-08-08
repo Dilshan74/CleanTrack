@@ -3,7 +3,7 @@ const Truck = require("../models/truck");
 // Add a new truck
 exports.addTruck = async (req, res) => {
     try {
-        const { plateNumber, capacity, status } = req.body;
+        const { plateNumber, capacity, status, postalCode } = req.body;
         
         const existingTruck = await Truck.findOne({ plateNumber });
         if (existingTruck) {
@@ -13,7 +13,8 @@ exports.addTruck = async (req, res) => {
         const truck = await Truck.create({
             plateNumber,
             capacity,
-            status
+            status,
+            postalCode
         });
 
         res.status(201).json({ success: true, truck });
@@ -35,9 +36,9 @@ exports.getTrucks = async (req, res) => {
 // Update a truck
 exports.updateTruck = async (req, res) => {
     try {
-        const { plateNumber, capacity, status, assignedDriver } = req.body;
+        const { plateNumber, capacity, status, postalCode, assignedDriver } = req.body;
         
-        let updateData = { plateNumber, capacity, status };
+        let updateData = { plateNumber, capacity, status, postalCode };
         if (assignedDriver !== undefined) {
             updateData.assignedDriver = assignedDriver;
         }

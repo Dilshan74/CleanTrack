@@ -34,16 +34,14 @@ export default function CollectionSchedule() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Time</th>
-                  <th className="px-4 py-3 font-medium">Waste type</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.date} className="border-t">
+                  <tr key={r.date + r.time} className="border-t">
                     <td className="px-4 py-3">{r.date}</td>
                     <td className="px-4 py-3">{r.time}</td>
-                    <td className="px-4 py-3">{r.type}</td>
                     <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                   </tr>
                 ))}

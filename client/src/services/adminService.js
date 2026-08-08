@@ -118,6 +118,7 @@ export function getRoutes() {
           zone: zoneLabel,
           stops: r.areas?.length || 0,
           days: r.collectionTime || "—",
+          postalCode: r.postalCode || "",
           driver: r.assignedDriver?.name || "Unassigned",
           truck: r.assignedDriver?.vehicleNumber?.plateNumber || "—",
         };
@@ -144,7 +145,7 @@ export function getCollections() {
         date: h.createdAt
           ? new Date(h.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
           : "—",
-        tons: 0,
+        postalCode: h.postalCode || "—",
         status: "Completed",
       }));
       const routeItems = (data.routes || []).map((r) => {
@@ -159,24 +160,38 @@ export function getCollections() {
           status = "In progress";
         }
         
+        let displayDate = "Scheduled";
+        if (r.collectionTime) {
+          const rawDate = r.collectionTime.split(" ")[0];
+          if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+            const [y, m, d] = rawDate.split("-");
+            displayDate = `${d}/${m}/${y}`;
+          } else {
+            displayDate = rawDate;
+          }
+        }
+
         return {
           id: r._id,
           driver: r.assignedDriver?.name || "Unassigned",
+          driverId: r.assignedDriver?._id || "",
           route: r.routeName || "—",
           zone: r.areas?.map((a) => a.areaName).join(", ") || "—",
-          date: "Today",
-          tons: 0,
+          postalCode: r.postalCode || "—",
+          date: displayDate,
+          fullTime: r.collectionTime,
           status,
+          isRoute: true,
         };
       });
       return [...historyItems, ...routeItems].slice(0, 20);
     },
     () => [
-      { id: "COL-9021", route: "Route A", zone: "Elm District", date: "Jul 14", tons: 9.2, status: "Completed" },
-      { id: "COL-9022", route: "Route B", zone: "Riverside", date: "Jul 14", tons: 7.8, status: "Completed" },
-      { id: "COL-9023", route: "Route C", zone: "Old Town", date: "Jul 15", tons: 4.1, status: "In progress" },
-      { id: "COL-9024", route: "Route D", zone: "Hillcrest", date: "Jul 15", tons: 0, status: "Scheduled" },
-      { id: "COL-9025", route: "Route A", zone: "Elm District", date: "Jul 16", tons: 0, status: "Scheduled" },
+      { id: "COL-9021", route: "Route A", zone: "Elm District", date: "Jul 14", status: "Completed" },
+      { id: "COL-9022", route: "Route B", zone: "Riverside", date: "Jul 14", status: "Completed" },
+      { id: "COL-9023", route: "Route C", zone: "Old Town", date: "Jul 15", status: "In progress", isRoute: true },
+      { id: "COL-9024", route: "Route D", zone: "Hillcrest", date: "Jul 15", status: "Scheduled", isRoute: true },
+      { id: "COL-9025", route: "Route A", zone: "Elm District", date: "Jul 16", status: "Scheduled", isRoute: true },
     ],
   );
 }

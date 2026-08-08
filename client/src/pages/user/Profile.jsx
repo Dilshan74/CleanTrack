@@ -9,7 +9,7 @@ const fields = [
   ["phone", "Phone"],
   ["nationalId", "National ID"],
   ["address", "Address"],
-  ["zone", "Zone"],
+  ["postalCode", "Postal Code"],
 ];
 
 export default function Profile() {
@@ -46,7 +46,7 @@ export default function Profile() {
             {initials(form.name)}
           </div>
           <div className="mt-3 font-semibold">{form.name}</div>
-          <div className="text-sm text-muted-foreground">Resident · {form.zone}</div>
+          <div className="text-sm text-muted-foreground">Resident · {form.postalCode || "No postal code"}</div>
           <button className="mt-4 rounded-lg border px-3 py-2 text-sm hover:bg-muted">Change photo</button>
         </div>
 

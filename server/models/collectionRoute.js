@@ -13,6 +13,11 @@ const collectionRouteSchema = new mongoose.Schema({
         required:true
     },
 
+    postalCode:{
+        type:String,
+        default:""
+    },
+
 
     collectionDay:{
         type:String,

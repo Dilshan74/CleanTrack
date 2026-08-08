@@ -1,6 +1,7 @@
 const User = require("../models/user");
 const CollectionRequest = require("../models/collectionRequest");
 const CollectionRoute = require("../models/collectionRoute");
+const Route = require("../models/route");
 const Notification = require("../models/notification");
 const CollectionHistory = require("../models/collectionHistory");
 
@@ -22,7 +23,7 @@ exports.getUserDashboard = async (req, res) => {
         const nextItem = upcoming.find(r => r.status === "Approved") || upcoming[0];
         const nextPickup = nextItem
             ? {
-                when: new Date(nextItem.collectionDate).toLocaleDateString("en-US", { weekday: "long" }),
+                when: new Date(nextItem.collectionDate).toLocaleDateString("en-GB"),
                 time: "N/A",
                 type: nextItem.garbageType
               }
@@ -31,7 +32,7 @@ exports.getUserDashboard = async (req, res) => {
         const upcomingList = upcoming.map((r, i) => ({
             id: r._id,
             type: r.garbageType,
-            date: new Date(r.collectionDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+            date: new Date(r.collectionDate).toLocaleDateString("en-GB"),
             time: "N/A",
             status: r.status
         }));
@@ -70,10 +71,10 @@ exports.getUserProfile = async (req, res) => {
 // 2. Update profile
 exports.updateUserProfile = async (req, res) => {
     try {
-        const { fullName, phone, address } = req.body;
+        const { fullName, phone, address, postalCode } = req.body;
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            { fullName, phone, address },
+            { fullName, phone, address, postalCode },
             { new: true, runValidators: true }
         ).select("-password");
 
@@ -116,23 +117,38 @@ exports.getUserRequests = async (req, res) => {
     }
 };
 
-// 5. View my collection schedule
+// 5. View my collection schedule — matched by postal code
 exports.getUserSchedule = async (req, res) => {
     try {
-        // Find approved requests which serve as schedules
-        const requests = await CollectionRequest.find({
-            user: req.user.id,
-            status: "Approved"
-        }).sort({ collectionDate: 1 });
-        
-        // Find general routes that are active (could be relevant to user's area in a real-world scenario)
-        const activeRoutes = await CollectionRoute.find({ status: "Active" }).sort({ collectionDay: 1 });
+        const user = await User.findById(req.user.id).select("postalCode address");
+        const userPostalCode = (user?.postalCode || "").trim();
 
-        res.json({ 
-            success: true, 
+        let matchedRoutes = [];
+        if (userPostalCode) {
+            matchedRoutes = await Route.find({
+                postalCode: userPostalCode,
+                status: { $in: ["Active", "Inactive"] }
+            })
+            .populate("assignedDriver", "name phone")
+            .sort({ createdAt: -1 });
+        }
+
+        const scheduleItems = matchedRoutes.map((r) => ({
+            id: r._id,
+            routeName: r.routeName,
+            postalCode: r.postalCode,
+            collectionTime: r.collectionTime,
+            areas: r.areas?.map((a) => a.areaName).join(", ") || "—",
+            driver: r.assignedDriver?.name || "Unassigned",
+            driverPhone: r.assignedDriver?.phone || "",
+            status: r.status || "Active",
+        }));
+
+        res.json({
+            success: true,
             data: {
-                scheduledRequests: requests,
-                areaRoutes: activeRoutes
+                userPostalCode,
+                scheduleItems,
             }
         });
     } catch (error) {

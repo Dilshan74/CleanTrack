@@ -46,6 +46,11 @@ const routeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    postalCode: {
+        type: String,
+        trim: true,
+        default: ""
+    },
     assignedDriver: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Driver",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Leaf, User, Mail, Lock, Phone, MapPin, AlertCircle } from "lucide-react";
+import { Leaf, User, Mail, Lock, Phone, MapPin, Hash, AlertCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { APP_NAME, ROLES, ROLE_HOME } from "../../utils/constants";
 import { validateRegister, hasErrors } from "../../utils/helpers";
@@ -14,7 +14,8 @@ export default function Register() {
     password: "",
     phone: "",
     address: "",
-    role: ROLES.USER, // residents only — admin/driver accounts are created by admins
+    postalCode: "",
+    role: ROLES.USER,
   });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
@@ -125,6 +126,21 @@ export default function Register() {
                 />
               </div>
               {errors.address && <span className="mt-1 block text-xs text-destructive">{errors.address}</span>}
+            </label>
+
+            {/* Postal Code */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">Postal Code</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  value={form.postalCode}
+                  onChange={(e) => update("postalCode", e.target.value)}
+                  placeholder="e.g. 80000"
+                  className="w-full bg-transparent py-2 outline-none"
+                />
+              </div>
+              <span className="mt-1 block text-xs text-muted-foreground">Used to match your area's collection schedule.</span>
             </label>
 
             {/* Password */}
