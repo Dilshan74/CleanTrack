@@ -14,7 +14,8 @@ const {
     getAssignedRoute,
     updateCollectionStatus,
     updateLiveLocation,
-    completeArea,
+    startCollection,
+    completeCollection,
     getDashboard,
     getDriverNotifications
 }=require("../controllers/driverController");
@@ -47,8 +48,11 @@ router.put("/dashboard/location", driverAuth, updateLiveLocation);
 router.put("/location", driverAuth, updateLiveLocation);
 
 // Complete Area
-router.put("/dashboard/complete-area/:id", driverAuth, completeArea);
-router.put("/complete-area/:id", driverAuth, completeArea);
+router.put("/dashboard/complete-area/:id", driverAuth, completeCollection);
+router.put("/complete-area/:id", driverAuth, completeCollection);
+
+// Start Collection
+router.put("/start-collection/:id", driverAuth, startCollection);
 
 // Notifications
 router.get("/notifications", driverAuth, getDriverNotifications);

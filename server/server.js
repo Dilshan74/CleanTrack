@@ -64,21 +64,66 @@ const io = new Server(server, {
     }
 });
 
+// Import Driver model for persisting location from socket events
+const Driver = require("./models/driver");
+
 // Socket.io connection logic
 io.on("connection", (socket) => {
     console.log(`Socket client connected: ${socket.id}`);
 
-    // Allow clients to join rooms (e.g. driver room, admin room)
+    // Allow clients to join rooms (e.g. driver room, route room)
     socket.on("join", (room) => {
         socket.join(room);
-        console.log(`Socket ${socket.id} joined room: ${room}`);
+        console.log(`[Socket] ${socket.id} joined room: ${room}`);
     });
 
     // Handle driver location updates
-    socket.on("driver_location", (data) => {
-        // data = { driverId, lat, lng, speed, heading }
-        // Broadcast location update to anyone listening
-        io.emit("driver_location_update", data);
+    // Payload: { driverId, driverName, routeId, postalCode, lat, lng, speed, heading, updatedAt }
+    socket.on("driver_location", async (data) => {
+        console.log(`[DRIVER LOCATION] driverId=${data.driverId} routeId=${data.routeId} postalCode=${data.postalCode} lat=${data.lat} lng=${data.lng} speed=${data.speed}`);
+
+        // ── Persist the latest location to the Driver document ──
+        if (data.driverId && data.driverId !== "unknown") {
+            try {
+                await Driver.findByIdAndUpdate(data.driverId, {
+                    location: { lat: data.lat, lng: data.lng }
+                });
+                console.log(`[BACKEND LOCATION UPDATE] driverId=${data.driverId} location saved: lat=${data.lat} lng=${data.lng}`);
+            } catch (err) {
+                console.error(`[Socket] Failed to persist location for driverId=${data.driverId}:`, err.message);
+            }
+        }
+
+        const locationPayload = {
+            driverId:   data.driverId,
+            driverName: data.driverName,
+            routeId:    data.routeId,
+            postalCode: data.postalCode,
+            lat:        data.lat,
+            lng:        data.lng,
+            speed:      data.speed,
+            heading:    data.heading,
+            updatedAt:  data.updatedAt || new Date().toISOString(),
+        };
+
+        // ── Primary: broadcast to route-specific room using routeId ──
+        if (data.routeId) {
+            const room = `route-${data.routeId}`;
+            console.log(`[SOCKET] Broadcasting truck_location_updated to room: ${room}`);
+            io.to(room).emit("truck_location_updated", locationPayload);
+        }
+
+        // ── Legacy fallback: also broadcast to postalCode-based room ──
+        if (data.postalCode) {
+            const legacyRoom = `route:${data.postalCode}`;
+            io.to(legacyRoom).emit("driver_location_update", locationPayload);
+        } else {
+            // No postalCode and no routeId — broadcast to all (last resort)
+            if (!data.routeId) {
+                console.log(`[Socket] No routeId or postalCode — broadcasting to all`);
+                io.emit("driver_location_update", locationPayload);
+            }
+        }
     });
 
     socket.on("disconnect", () => {

@@ -257,7 +257,9 @@ exports.getAssignedRoute = async (req, res) => {
         if (!req.driverProfile.assignedRoute) {
             return res.json({ success: true, message: "No route assigned", route: null });
         }
-        const route = await Route.findById(req.driverProfile.assignedRoute);
+        const route = await Route.findById(req.driverProfile.assignedRoute)
+            .populate("assignedDriver", "_id name email")
+            .populate("assignedTruck", "_id plateNumber");
         res.json({
             success: true,
             route
@@ -319,13 +321,33 @@ exports.updateLiveLocation = async (req, res) => {
     }
 };
 
-// Complete Assigned Areas (Entire Route)
-exports.completeArea = async (req, res) => {
+// Start Collection
+exports.startCollection = async (req, res) => {
     try {
         const routeId = req.params.id;
         const route = await Route.findByIdAndUpdate(
             routeId, 
-            { status: "Completed" }, 
+            { collectionStatus: "In_Progress" }, 
+            { new: true }
+        );
+
+        res.json({
+            success: true,
+            message: "Collection started",
+            route
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Complete Assigned Areas (Entire Route)
+exports.completeCollection = async (req, res) => {
+    try {
+        const routeId = req.params.id;
+        const route = await Route.findByIdAndUpdate(
+            routeId, 
+            { status: "Completed", collectionStatus: "Completed" }, 
             { new: true }
         );
 

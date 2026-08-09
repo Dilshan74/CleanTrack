@@ -56,10 +56,20 @@ const routeSchema = new mongoose.Schema({
         ref: "Driver",
         default: null
     },
+    assignedTruck: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Truck",
+        default: null
+    },
     status: {
         type: String,
         enum: ["Active", "Completed", "Inactive"],
         default: "Active"
+    },
+    collectionStatus: {
+        type: String,
+        enum: ["Pending", "Assigned", "Started", "In_Progress", "Completed"],
+        default: "Pending"
     }
 }, {
     timestamps: true

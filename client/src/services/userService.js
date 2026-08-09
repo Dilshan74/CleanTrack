@@ -43,7 +43,7 @@ export function getSchedule() {
     async () => {
       const { data } = await api.get("/user/schedule");
       const items = data.data?.scheduleItems || [];
-      return items.map((r) => {
+      const mappedItems = items.map((r) => {
         const timeStr = r.collectionTime || "7:30 AM";
         const parts = timeStr.split(" ");
         let date = "Scheduled";
@@ -56,24 +56,47 @@ export function getSchedule() {
           } else {
             date = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
           }
-          time = parts.slice(1).join(" ");
+          const rawTime = parts.slice(1).join(" ").trim();
+          if (/^\d{1,2}:\d{2}/.test(rawTime)) {
+            let [h, m] = rawTime.split(":");
+            let hour = parseInt(h, 10);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            hour = hour % 12;
+            hour = hour ? hour : 12;
+            time = `${hour}:${m} ${ampm}`;
+          } else {
+            time = rawTime;
+          }
         }
         
         return {
-          date: date,
-          time: time,
-          status: r.status === "Active" ? "Scheduled" : r.status,
+          id:               r.id || "",
+          date:             date,
+          time:             time,
+          routeName:        r.routeName || "",
+          collectionTime:   r.collectionTime || "",
+          status:           r.status === "Active" ? "Scheduled" : r.status,
+          collectionStatus: r.collectionStatus || "Pending",
+          driverId:         r.driverId || "",
+          driverName:       r.driver || "Unassigned",
+          truckPlate:       r.truckPlate || "",
+          postalCode:       r.postalCode || ""
         };
       });
+
+      return { scheduleItems: mappedItems, userPostalCode: data.data?.userPostalCode || "" };
     },
-    () => [
-      { date: "Mon, Jul 14", time: "7:30 AM", type: "General waste", status: "Completed" },
-      { date: "Wed, Jul 16", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
-      { date: "Fri, Jul 18", time: "8:00 AM", type: "Organic waste", status: "Scheduled" },
-      { date: "Mon, Jul 21", time: "7:30 AM", type: "General waste", status: "Scheduled" },
-      { date: "Wed, Jul 23", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
-      { date: "Sat, Jul 26", time: "9:00 AM", type: "Bulk pickup", status: "Scheduled" },
-    ]
+    () => ({
+      scheduleItems: [
+        { date: "Mon, Jul 14", time: "7:30 AM", type: "General waste", status: "Completed" },
+        { date: "Wed, Jul 16", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
+        { date: "Fri, Jul 18", time: "8:00 AM", type: "Organic waste", status: "Scheduled" },
+        { date: "Mon, Jul 21", time: "7:30 AM", type: "General waste", status: "Scheduled" },
+        { date: "Wed, Jul 23", time: "7:30 AM", type: "Recyclables", status: "Scheduled" },
+        { date: "Sat, Jul 26", time: "9:00 AM", type: "Bulk pickup", status: "Scheduled" },
+      ],
+      userPostalCode: ""
+    })
   );
 }
 

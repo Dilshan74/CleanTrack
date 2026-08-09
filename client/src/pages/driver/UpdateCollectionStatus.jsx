@@ -31,8 +31,20 @@ export default function UpdateCollectionStatus() {
   const { routeName, days, stops } = stopsData;
   const done = stops.filter((s) => s.status !== "Pending").length;
 
-  const todayName = new Date().toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
-  const isActiveDay = days ? days.toLowerCase().includes(todayName) : true;
+  const today = new Date();
+  const todayName = today.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+  
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const isoDate = `${yyyy}-${mm}-${dd}`;
+  const gbDate = `${dd}/${mm}/${yyyy}`;
+
+  const isActiveDay = days ? (
+    days.toLowerCase().includes(todayName) || 
+    days.includes(isoDate) || 
+    days.includes(gbDate)
+  ) : true;
 
   return (
     <div>

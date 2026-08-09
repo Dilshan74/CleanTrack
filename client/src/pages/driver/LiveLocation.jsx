@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import { MapPin, Navigation, Gauge, RefreshCw, CheckCircle2, LocateFixed, Shield } from "lucide-react";
+import { MapPin, Gauge, RefreshCw, CheckCircle2, LocateFixed, Shield } from "lucide-react";
 import { useLocation } from "../../hooks/useLocation";
-import { GoogleMap, useJsApiLoader, MarkerF, DirectionsRenderer } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF } from "@react-google-maps/api";
 import driverService from "../../services/driverService";
+import api from "../../services/api";
 
 const MAP_CONTAINER_STYLE = {
   width: "100%",
@@ -59,12 +60,11 @@ function distanceInKm(lat1, lon1, lat2, lon2) {
 }
 
 export default function LiveLocation() {
-  const { position, tracking, permissionState, start, stop, driverInfo } = useLocation();
-  const driverLabel = driverInfo?.fullName ? `\uD83D\uDE9B ${driverInfo.fullName}` : "\uD83D\uDE9B Driver";
+  const [routeInfo, setRouteInfo] = useState(null);
+  
+  const { position, tracking, permissionState, start, stop } = useLocation({ routeInfo });
+  const driverLabel = "My Truck";
   const [stopsData, setStopsData] = useState(null);
-  const [directions, setDirections] = useState(null);
-  const [eta, setEta] = useState("Calculating...");
-  const [distanceRemaining, setDistanceRemaining] = useState("Calculating...");
   const [autoCompletedStop, setAutoCompletedStop] = useState(null);
 
   const { isLoaded } = useJsApiLoader({
@@ -74,6 +74,7 @@ export default function LiveLocation() {
 
   const loadStops = useCallback(() => {
     driverService.getStops().then(setStopsData);
+    driverService.getRoute().then(data => setRouteInfo(data.route));
   }, []);
 
   useEffect(() => {
@@ -84,29 +85,9 @@ export default function LiveLocation() {
     if (!isLoaded || !position || !stopsData || stopsData.stops.length === 0) return;
     const pendingStops = stopsData.stops.filter((s) => s.status === "Pending");
     if (pendingStops.length === 0) {
-      setDirections(null);
-      setEta("No pending stops");
-      setDistanceRemaining("0 km");
       return;
     }
-    const nextStop = pendingStops[0];
-    const directionsService = new window.google.maps.DirectionsService();
-    directionsService.route(
-      {
-        origin: { lat: position.lat, lng: position.lng },
-        destination: { lat: nextStop.lat, lng: nextStop.lng },
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === window.google.maps.DirectionsStatus.OK) {
-          setDirections(result);
-          const leg = result.routes[0].legs[0];
-          setEta(leg.duration.text);
-          setDistanceRemaining(leg.distance.text);
-        }
-      }
-    );
-  }, [isLoaded, position, stopsData]);
+  }, [position, stopsData]);
 
   useEffect(() => {
     if (!position || !stopsData || stopsData.stops.length === 0) return;
@@ -207,10 +188,18 @@ export default function LiveLocation() {
             {tracking ? "Tracking" : permissionState === "acquiring" ? "Acquiring GPS..." : "Paused"}
           </span>
           <button
-            onClick={tracking ? stop : start}
+            onClick={async () => {
+              if (tracking) {
+                if(routeInfo) await api.put(`/driver/complete-area/${routeInfo._id}`);
+                stop();
+              } else {
+                if(routeInfo) await api.put(`/driver/start-collection/${routeInfo._id}`);
+                start();
+              }
+            }}
             className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted cursor-pointer"
           >
-            <RefreshCw className="h-4 w-4" /> {tracking ? "Stop" : "Start Tracking"}
+            <RefreshCw className="h-4 w-4" /> {tracking ? "Complete Collection" : "Start Collection"}
           </button>
         </div>
       </div>
@@ -261,6 +250,16 @@ export default function LiveLocation() {
                   }}
                 />
               )}
+
+              {stopsData && stopsData.stops.map((stop) => (
+                <MarkerF
+                  key={stop.id}
+                  position={{ lat: stop.lat, lng: stop.lng }}
+                  options={{
+                    label: { text: stop.seq.toString(), color: "#fff", fontSize: "12px", fontWeight: "bold" },
+                  }}
+                />
+              ))}
             </GoogleMap>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
@@ -286,20 +285,7 @@ export default function LiveLocation() {
                 <div className="font-medium">{position ? `${Math.round(position.speed)} km/h` : "—"}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Navigation className="h-4 w-4 text-primary" />
-              <div>
-                <div className="text-muted-foreground text-xs">ETA to Next Stop</div>
-                <div className="font-semibold text-primary">{eta}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="h-4 w-4 text-emerald-500" />
-              <div>
-                <div className="text-muted-foreground text-xs">Distance Remaining</div>
-                <div className="font-semibold text-emerald-500">{distanceRemaining}</div>
-              </div>
-            </div>
+
             <div className="pt-2 text-xs text-muted-foreground">
               Updated: {position ? new Date(position.updatedAt).toLocaleTimeString() : "waiting…"}
             </div>

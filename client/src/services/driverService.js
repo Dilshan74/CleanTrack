@@ -100,6 +100,16 @@ export function getStops() {
   );
 }
 
+export function getRoute() {
+  return tryLive(
+    async () => {
+      const { data } = await api.get("/driver/schedule");
+      return { route: data.route };
+    },
+    () => ({ route: { _id: "mock1", postalCode: "MockRoute1" } })
+  );
+}
+
 export async function updateStopStatus(id, status, wasteType) {
   try {
     // Server expects PUT /driver/update-status/:id
@@ -179,6 +189,7 @@ export default {
   getDashboard,
   getTodaysSchedule,
   getStops,
+  getRoute,
   updateStopStatus,
   getHistory,
   getNotifications,

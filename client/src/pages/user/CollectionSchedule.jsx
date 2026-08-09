@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import Loader from "../../components/common/Loader";
 import userService from "../../services/userService";
+import Modal from "../../components/common/Modal";
+import LiveTrackingMap from "./LiveTrackingMap";
+import { LocateFixed } from "lucide-react";
 
 function StatusBadge({ status }) {
   const tone =
@@ -12,9 +15,10 @@ function StatusBadge({ status }) {
 
 export default function CollectionSchedule() {
   const [rows, setRows] = useState(null);
+  const [trackingDriver, setTrackingDriver] = useState(null);
 
   useEffect(() => {
-    userService.getSchedule().then(setRows);
+    userService.getSchedule().then(data => setRows(data.scheduleItems || []));
   }, []);
 
   return (
@@ -35,16 +39,47 @@ export default function CollectionSchedule() {
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Time</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium w-32"></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.date + r.time} className="border-t">
-                    <td className="px-4 py-3">{r.date}</td>
-                    <td className="px-4 py-3">{r.time}</td>
-                    <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="px-4 py-8 text-center text-muted-foreground">
+                      No collections scheduled for your area yet.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  rows.map((r, index) => (
+                    <tr key={index} className="border-t">
+                      <td className="px-4 py-3">{r.date}</td>
+                      <td className="px-4 py-3">{r.time}</td>
+                      <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                      <td className="px-4 py-3 text-right">
+                        {r.driverId && r.collectionStatus !== "Completed" && (
+                          <button
+                            onClick={() => setTrackingDriver({
+                              routeId:        r.id,
+                              driverId:       r.driverId,
+                              driverName:     r.driverName,
+                              truckPlate:     r.truckPlate,
+                              status:         r.collectionStatus,
+                              postalCode:     r.postalCode,
+                              routeName:      r.routeName,
+                              collectionTime: r.time,
+                            })}
+                            className="inline-flex items-center gap-1.5 rounded-lg border bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                          >
+                            <LocateFixed className="h-3 w-3" /> Track Truck
+                          </button>
+                        )}
+                        {r.collectionStatus === "Completed" && (
+                           <span className="text-xs text-muted-foreground">Today's collection completed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -64,6 +99,29 @@ export default function CollectionSchedule() {
           </div>
         </div>
       )}
+
+      {/* Live Tracking Modal */}
+      <Modal 
+        isOpen={!!trackingDriver} 
+        onClose={() => setTrackingDriver(null)} 
+        title=""
+        maxWidth="max-w-5xl"
+        noPadding
+      >
+        {trackingDriver && (
+          <LiveTrackingMap 
+            routeId={trackingDriver.routeId}
+            driverId={trackingDriver.driverId}
+            driverName={trackingDriver.driverName}
+            truckPlate={trackingDriver.truckPlate}
+            collectionStatus={trackingDriver.status}
+            postalCode={trackingDriver.postalCode}
+            routeName={trackingDriver.routeName}
+            collectionTime={trackingDriver.collectionTime}
+            onClose={() => setTrackingDriver(null)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

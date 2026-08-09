@@ -16,11 +16,12 @@ const filters = ["All", "Scheduled", "In progress", "Completed", "Missed"];
 export default function ManageCollections() {
   const [items, setItems] = useState(null);
   const [drivers, setDrivers] = useState([]);
+  const [trucks, setTrucks] = useState([]);
   const [filter, setFilter] = useState("All");
 
   const [editingItem, setEditingItem] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ status: "Active", collectionDate: "", collectionTimeOfDay: "", driverId: "" });
+  const [form, setForm] = useState({ status: "Active", collectionDate: "", collectionTimeOfDay: "", driverId: "", truckId: "" });
 
   function refreshCollections() {
     setItems(null);
@@ -30,6 +31,7 @@ export default function ManageCollections() {
   useEffect(() => {
     refreshCollections();
     adminService.getDrivers().then(setDrivers);
+    adminService.getTrucks().then(setTrucks);
   }, []);
 
   async function handleUpdate(e) {
@@ -41,7 +43,13 @@ export default function ManageCollections() {
         status: form.status,
         collectionTime: `${form.collectionDate} ${form.collectionTimeOfDay}`.trim(),
       };
-      if (form.driverId) payload.assignedDriver = form.driverId;
+      if (form.driverId) {
+        payload.assignedDriver = form.driverId;
+        payload.collectionStatus = "Assigned";
+      }
+      if (form.truckId) {
+        payload.assignedTruck = form.truckId;
+      }
       
       await adminService.updateRoute(editingItem.id, payload);
       setEditingItem(null);
@@ -111,7 +119,10 @@ export default function ManageCollections() {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id} className="border-t">
-                  <td className="px-4 py-3 font-medium">{c.driver || "—"}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {c.driver || "—"}
+                    <div className="text-xs text-muted-foreground font-normal">{c.truck || "No truck"}</div>
+                  </td>
                   <td className="px-4 py-3">{c.route}</td>
                   <td className="px-4 py-3">{c.zone}</td>
                   <td className="px-4 py-3">{c.postalCode || "—"}</td>
@@ -127,6 +138,7 @@ export default function ManageCollections() {
                           collectionDate: timeParts[0] || "",
                           collectionTimeOfDay: timeParts.slice(1).join(" ") || "",
                           driverId: c.driverId || "",
+                          truckId: c.truckId || "",
                         });
                       }} className="text-primary hover:text-primary/80" title="Edit">
                         <Edit2 className="h-4 w-4" />
@@ -157,18 +169,33 @@ export default function ManageCollections() {
               Marking a route as Completed removes it from the pending schedule.
             </p>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Assigned Driver</label>
-            <select
-              value={form.driverId}
-              onChange={(e) => setForm({ ...form, driverId: e.target.value })}
-              className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Unassigned</option>
-              {drivers.map(d => (
-                <option key={d._id} value={d._id}>{d.name}</option>
-              ))}
-            </select>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned Driver</label>
+              <select
+                value={form.driverId}
+                onChange={(e) => setForm({ ...form, driverId: e.target.value })}
+                className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Unassigned</option>
+                {drivers.map(d => (
+                  <option key={d._id} value={d._id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned Truck</label>
+              <select
+                value={form.truckId}
+                onChange={(e) => setForm({ ...form, truckId: e.target.value })}
+                className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Unassigned</option>
+                {trucks.map(t => (
+                  <option key={t._id} value={t._id}>{t.plateNumber}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">

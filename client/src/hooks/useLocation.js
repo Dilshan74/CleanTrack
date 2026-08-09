@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL, STORAGE_KEYS } from "../utils/constants";
 
@@ -24,7 +24,7 @@ function getDriverInfo() {
   return null;
 }
 
-export function useLocation({ auto = true } = {}) {
+export function useLocation({ auto = true, routeInfo = null } = {}) {
   const [position, setPosition] = useState(null);
   const [error, setError] = useState(null);
   const [tracking, setTracking] = useState(false);
@@ -35,33 +35,86 @@ export function useLocation({ auto = true } = {}) {
   const socketRef = useRef(null);
   const driverInfo = useRef(getDriverInfo());
 
-  /* Socket */
+  // Keep refs to latest values to avoid stale closures
+  const routeInfoRef = useRef(routeInfo);
+  const positionRef = useRef(null);
+  const trackingRef = useRef(false);
+
+  // Keep refs in sync with state/props
+  useEffect(() => {
+    routeInfoRef.current = routeInfo;
+  }, [routeInfo]);
+
+  useEffect(() => {
+    trackingRef.current = tracking;
+  }, [tracking]);
+
+  /* Emit helper - reads from refs so always has latest values */
+  const emitLocation = useCallback((pos) => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return;
+
+    const info = driverInfo.current;
+    const currentRoute = routeInfoRef.current;
+
+    // Use the route's assignedDriver (Driver _id string) if available,
+    // otherwise fall back to the logged-in User _id
+    const correctDriverId =
+      (typeof currentRoute?.assignedDriver === "string"
+        ? currentRoute.assignedDriver
+        : currentRoute?.assignedDriver?._id) ||
+      (info ? info.id || info._id : "unknown");
+
+    const payload = {
+      driverId:   correctDriverId,
+      driverName: info?.fullName || info?.name || "Driver",
+      routeId:    currentRoute?._id || "",
+      postalCode: currentRoute?.postalCode || "",
+      ...pos,
+    };
+
+    console.log("[DRIVER LOCATION] emitting driver_location:", payload);
+    socket.emit("driver_location", payload);
+  }, []);
+
+  /* Socket setup - only once */
   useEffect(() => {
     const socketHost = API_BASE_URL.replace("/api", "");
     const socket = io(socketHost);
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      console.log("[useLocation] socket connected:", socket.id);
       const info = driverInfo.current;
       if (info) {
         socket.emit("join", `driver:${info.id || info._id}`);
       }
+      // If already tracking and have a position, re-emit so the server
+      // picks it up right away (handles page reload while tracking)
+      if (positionRef.current && trackingRef.current) {
+        setTimeout(() => emitLocation(positionRef.current), 200);
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("[useLocation] socket disconnected");
     });
 
     return () => socket.disconnect();
+  // emitLocation is stable (useCallback with [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Emit helper */
-  const emitLocation = useCallback((pos) => {
-    if (socketRef.current?.connected) {
-      const info = driverInfo.current;
-      socketRef.current.emit("driver_location", {
-        driverId: info ? (info.id || info._id) : "unknown",
-        driverName: info?.fullName || "Driver",
-        ...pos,
-      });
+  /* When routeInfo arrives (async fetch), re-emit last position so the
+     postalCode + correct driverId are broadcast even if the truck is stationary */
+  useEffect(() => {
+    if (!routeInfo) return;
+    routeInfoRef.current = routeInfo;
+    if (positionRef.current && trackingRef.current) {
+      emitLocation(positionRef.current);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeInfo]);
 
   /* Stop */
   const stop = useCallback(() => {
@@ -69,6 +122,7 @@ export function useLocation({ auto = true } = {}) {
       navigator.geolocation.clearWatch(watchId.current);
       watchId.current = null;
     }
+    trackingRef.current = false;
     setTracking(false);
   }, []);
 
@@ -89,6 +143,7 @@ export function useLocation({ auto = true } = {}) {
     }
 
     setPermissionState("acquiring");
+    trackingRef.current = true;
     setTracking(true);
 
     watchId.current = navigator.geolocation.watchPosition(
@@ -104,10 +159,12 @@ export function useLocation({ auto = true } = {}) {
           accuracy: pos.coords.accuracy,
           updatedAt: new Date().toISOString(),
         };
+        positionRef.current = nextPos;
         setPosition(nextPos);
         emitLocation(nextPos);
       },
       (err) => {
+        trackingRef.current = false;
         setTracking(false);
         watchId.current = null;
         if (err.code === err.PERMISSION_DENIED) {

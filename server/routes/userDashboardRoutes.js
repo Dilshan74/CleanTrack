@@ -10,7 +10,8 @@ const {
     getUserSchedule,
     getUserNotifications,
     getUserHistory,
-    getUserDashboard
+    getUserDashboard,
+    getTruckLocation
 } = require("../controllers/userDashboardController");
 
 // Use protect middleware for all routes below
@@ -41,6 +42,9 @@ router.get("/notification", getUserNotifications);
 
 // 7: View my collection history
 router.get("/history", getUserHistory);
+
+// 8: Get live truck/driver location for the user's postal code
+router.get("/truck-location", getTruckLocation);
 
 // Aliases: /complaints maps to the same handlers as /requests
 // so that userService.js calls to /user/complaints work correctly
