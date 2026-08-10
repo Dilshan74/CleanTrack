@@ -68,6 +68,8 @@ export function getDrivers() {
         route: d.assignedRoute?.routeName || "Unassigned",
         truck: d.vehicleNumber?.plateNumber || "Unassigned",
         status: d.status || "Available",
+        _routeId: d.assignedRoute?._id || "",
+        _truckId: d.vehicleNumber?._id || "",
       }));
     },
     () => [
@@ -266,6 +268,7 @@ export async function addDriver(payload) {
   return data;
 }
 
+
 export async function deleteDriver(id) {
   const { data } = await api.delete(`/admin/drivers/${id}`);
   return data;
@@ -273,6 +276,11 @@ export async function deleteDriver(id) {
 
 export async function assignDriver(id, payload) {
   const { data } = await api.put(`/admin/drivers/assign/${id}`, payload);
+  return data;
+}
+
+export async function updateDriverStatus(id, status) {
+  const { data } = await api.put(`/admin/drivers/${id}`, { status });
   return data;
 }
 
@@ -315,6 +323,7 @@ export default {
   addDriver,
   deleteDriver,
   assignDriver,
+  updateDriverStatus,
   addTruck,
   deleteTruck,
   addRoute,

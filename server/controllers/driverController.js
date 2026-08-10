@@ -93,7 +93,26 @@ exports.addDriver = async (req, res) => {
 exports.getDrivers = async (req, res) => {
     try {
         const drivers = await Driver.find().populate("assignedRoute vehicleNumber");
-        res.json({ success: true, count: drivers.length, data: drivers });
+
+        // Derive a meaningful status from the assigned route instead of relying
+        // on the stored status field (which is always "Available").
+        const driversWithStatus = drivers.map((d) => {
+            const obj = d.toObject();
+            const cs = d.assignedRoute?.collectionStatus;
+            if (!d.assignedRoute) {
+                obj.status = "Available";
+            } else if (cs === "In_Progress" || cs === "Started") {
+                obj.status = "On Route";
+            } else if (cs === "Completed") {
+                obj.status = "Completed";
+            } else {
+                // Pending / Assigned — driver has a route but hasn't started yet
+                obj.status = "Assigned";
+            }
+            return obj;
+        });
+
+        res.json({ success: true, count: driversWithStatus.length, data: driversWithStatus });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -4,10 +4,15 @@ import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
 
+const STATUSES = ["Available", "Assigned", "On Route", "Off Duty", "On Leave"];
+
 const tone = {
-  "On route": "bg-success/15 text-success",
-  "Off duty": "bg-muted text-muted-foreground",
-  "On leave": "bg-warning/20 text-warning-foreground",
+  "Available": "bg-emerald-100 text-emerald-700",
+  "Assigned":  "bg-blue-100 text-blue-700",
+  "On Route":  "bg-amber-100 text-amber-700",
+  "Off Duty":  "bg-muted text-muted-foreground",
+  "On Leave":  "bg-orange-100 text-orange-700",
+  "Completed": "bg-muted text-muted-foreground",
 };
 
 const emptyForm = {
@@ -37,6 +42,10 @@ export default function ManageDrivers() {
   const [assignError, setAssignError] = useState("");
   const [assigning, setAssigning] = useState(false);
 
+  // Inline status editing
+  const [editingStatusId, setEditingStatusId] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+
   function refresh() {
     setDrivers(null);
     adminService.getDrivers().then(setDrivers);
@@ -63,6 +72,21 @@ export default function ManageDrivers() {
       vehicleNumber: driver._truckId || "",
     });
     setAssignError("");
+  }
+
+  async function handleStatusChange(driverId, newStatus) {
+    setStatusSaving(true);
+    try {
+      await adminService.updateDriverStatus(driverId, newStatus);
+      setDrivers((prev) =>
+        prev.map((d) => (d._id === driverId ? { ...d, status: newStatus } : d))
+      );
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to update status.");
+    } finally {
+      setStatusSaving(false);
+      setEditingStatusId(null);
+    }
   }
 
   async function handleAddDriver(e) {
@@ -158,7 +182,28 @@ export default function ManageDrivers() {
                     <td className="px-4 py-3">{d.route}</td>
                     <td className="px-4 py-3">{d.truck}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs rounded-full px-2 py-0.5 ${tone[d.status] || tone["Off duty"]}`}>{d.status}</span>
+                      {editingStatusId === d._id ? (
+                        <select
+                          autoFocus
+                          disabled={statusSaving}
+                          defaultValue={d.status}
+                          onChange={(e) => handleStatusChange(d._id, e.target.value)}
+                          onBlur={() => setEditingStatusId(null)}
+                          className="rounded-md border bg-background px-2 py-0.5 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                        >
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          title="Click to change status"
+                          onClick={() => setEditingStatusId(d._id)}
+                          className={`text-xs rounded-full px-2 py-0.5 cursor-pointer hover:opacity-80 transition-opacity ${tone[d.status] || "bg-muted text-muted-foreground"}`}
+                        >
+                          {d.status}
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right flex items-center justify-end gap-3">
                       <button
