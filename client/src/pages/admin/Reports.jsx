@@ -32,8 +32,8 @@ export default function Reports() {
 
   if (!data) return <Loader label="Loading reports…" />;
 
-  const maxVol = Math.max(...data.monthlyVolume);
-  const maxCat = Math.max(...data.complaintCategories.map((c) => c.v));
+  const maxVol = Math.max(...(data.monthlyVolume.length ? data.monthlyVolume : [1]));
+  const maxCat = Math.max(...(data.complaintCategories.length ? data.complaintCategories.map((c) => c.v) : [1]));
 
   return (
     <div>
@@ -48,10 +48,10 @@ export default function Reports() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Stat icon={Truck} label="Waste collected" value={data.wasteCollected} hint="This month" />
-        <Stat icon={Recycle} label="Recycled" value={data.recycled} hint="37% recycling rate" tone="success" />
-        <Stat icon={Clock} label="Avg. delay" value={data.avgDelay} hint="-18% vs last month" tone="success" />
-        <Stat icon={TrendingUp} label="Growth" value={data.growth} hint="Coverage vs last quarter" />
+        <Stat icon={Truck} label="Total Collections" value={data.wasteCollected} hint="All time" />
+        <Stat icon={Recycle} label="Recycling Rate" value={data.recycled} hint="Collected vs total requests" tone="success" />
+        <Stat icon={Clock} label="Registered Users" value={data.avgDelay} hint="Active residents" tone="success" />
+        <Stat icon={TrendingUp} label="Monthly Growth" value={data.growth} hint="This month vs last month" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

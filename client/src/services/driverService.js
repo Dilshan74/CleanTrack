@@ -21,17 +21,18 @@ export function getDashboard() {
     },
     () => ({
       truck: "TRK-07",
-      route: "Route A · Elm District",
+      route: "Route A · Colombo Central",
       stopsToday: 42,
       completed: 28,
       etaNext: "6 min",
+      nextStopName: "Galle Road",
       etaFinish: "1:45 PM",
       fuel: 68,
       progress: 67,
       remainingKm: "5.2 km",
       announcements: [
-        "Road closure on 5th St — use Oak Ave detour.",
-        "New bulk pickup added to stop #38.",
+        "Road closure on 5th St — use detours.",
+        "New bulk pickup added.",
         "Depot check-in by 2:30 PM.",
       ],
     }),
@@ -145,17 +146,26 @@ export function getNotifications() {
         time: n.createdAt
           ? new Date(n.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
           : "—",
+        date: n.createdAt
+          ? new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : "",
         unread: !n.isRead,
-        tone: "primary",
+        type: n.notificationType || "System",
+        tone: n.tone || (
+          n.notificationType === "Route"   ? "warning"
+          : n.notificationType === "Request" ? "primary"
+          : "primary"
+        ),
       }));
     },
     () => [
-      { id: 1, title: "Route update", body: "Route A has 2 new stops added.", time: "1h ago", unread: true, tone: "primary" },
-      { id: 2, title: "Traffic alert", body: "Heavy traffic reported near Elm District.", time: "3h ago", unread: true, tone: "warning" },
-      { id: 3, title: "Maintenance due", body: "Truck TRK-07 is due for oil change tomorrow.", time: "1d ago", unread: false, tone: "muted" },
+      { id: 1, title: "Route assigned",    body: "You are assigned to Route.", time: "Today", date: "Today", unread: false, type: "Route",  tone: "primary" },
+      { id: 2, title: "Collection schedule", body: "Collection schedule updated.", time: "Today", date: "Today", unread: false, type: "Route",  tone: "primary" },
+      { id: 3, title: "Truck assigned",    body: "Your truck status: Active.",     time: "Today", date: "Today", unread: false, type: "System", tone: "primary" },
     ]
   );
 }
+
 
 export function getProfile() {
   return tryLive(
@@ -171,6 +181,7 @@ export function getProfile() {
         truck: d.vehicleNumber?.plateNumber || d.vehicleNumber || "Unassigned",
         route: d.assignedRoute?.routeName || d.assignedRoute || "Unassigned",
         shift: "N/A",
+        preferences: d.preferences || { shareLocation: true, routeAlerts: true, autoStatusSync: false }
       };
     },
     () => ({
@@ -181,8 +192,19 @@ export function getProfile() {
       truck: "TRK-07",
       route: "Route A",
       shift: "Morning · 6 AM–2 PM",
+      preferences: { shareLocation: true, routeAlerts: true, autoStatusSync: false }
     }),
   );
+}
+
+export async function updatePreferences(preferences) {
+  try {
+    const { data } = await api.put("/driver/preferences", { preferences });
+    return data;
+  } catch (err) {
+    console.error("Failed to update preferences:", err);
+    throw err;
+  }
 }
 
 export default {
@@ -194,4 +216,5 @@ export default {
   getHistory,
   getNotifications,
   getProfile,
+  updatePreferences,
 };

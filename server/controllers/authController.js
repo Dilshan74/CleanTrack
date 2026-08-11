@@ -1,6 +1,7 @@
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Notification = require("../models/notification");
 
 // Register User
 exports.registerUser = async (req, res) => {
@@ -68,6 +69,26 @@ exports.loginUser = async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
+
+        // Fire-and-forget: notify admin when a user logs in
+        if (user.role === "user") {
+            (async () => {
+                try {
+                    const admin = await User.findOne({ role: "admin" });
+                    if (admin) {
+                        await Notification.create({
+                            receiver: admin._id,
+                            receiverType: "Admin",
+                            title: "New User Login",
+                            message: `${user.fullName} (${user.email}) just logged in.`,
+                            notificationType: "System"
+                        });
+                    }
+                } catch (notifErr) {
+                    console.error("[Login Notification] Failed to create notification:", notifErr.message);
+                }
+            })();
+        }
 
         res.json({
             success: true,

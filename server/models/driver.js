@@ -49,6 +49,11 @@ const driverSchema = new mongoose.Schema({
     status:{
         type:String,
         default:"Available"
+    },
+    preferences: {
+        shareLocation: { type: Boolean, default: true },
+        routeAlerts: { type: Boolean, default: true },
+        autoStatusSync: { type: Boolean, default: false }
     }
 
 },

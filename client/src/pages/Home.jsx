@@ -1,3 +1,4 @@
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Leaf,
@@ -10,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import { APP_NAME } from "../utils/constants";
+import adminService from "../services/adminService";
 
 const features = [
   { icon: Clock, t: "Live schedules", d: "Residents see exactly when pickup is coming." },
@@ -25,6 +27,39 @@ const dashboards = [
 ];
 
 export default function Home() {
+  const [stats, setStats] = useState({
+    activeUsers: 13,
+    trucksOnRoute: 7,
+    pickupsToday: 0,
+    openComplaints: 0,
+    routeHealth: [
+      { r: "Route A · Galle Road", p: 92 },
+      { r: "Route B · Kandy Central", p: 68 },
+      { r: "Route C · Negombo Town", p: 41 },
+    ],
+  });
+
+  useEffect(() => {
+    adminService.getOverview().then((res) => {
+      if (res) {
+        setStats({
+          activeUsers: res.activeUsers || 0,
+          trucksOnRoute: res.trucksOnRoute || 0,
+          pickupsToday: res.pickupsToday || 0,
+          openComplaints: res.openComplaints || 0,
+          routeHealth: res.routeHealth && res.routeHealth.length > 0 ? res.routeHealth.map(rh => ({
+            r: rh.r || "Route",
+            p: rh.p || 0
+          })) : [
+            { r: "Route A · Galle Road", p: 92 },
+            { r: "Route B · Kandy Central", p: 68 },
+            { r: "Route C · Negombo Town", p: 41 },
+          ],
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card/60 backdrop-blur sticky top-0 z-20">
@@ -80,11 +115,7 @@ export default function Home() {
               <span className="text-xs rounded-full bg-success/15 text-success px-2 py-0.5">On schedule</span>
             </div>
             <div className="space-y-3">
-              {[
-                { r: "Route A · Elm District", p: 92 },
-                { r: "Route B · Riverside", p: 68 },
-                { r: "Route C · Old Town", p: 41 },
-              ].map((x) => (
+              {stats.routeHealth.slice(0, 3).map((x) => (
                 <div key={x.r}>
                   <div className="flex justify-between text-xs mb-1">
                     <span>{x.r}</span>
@@ -97,9 +128,18 @@ export default function Home() {
               ))}
             </div>
             <div className="grid grid-cols-3 gap-3 mt-6 text-center">
-              <div className="rounded-lg bg-muted p-3"><div className="text-xl font-bold">24</div><div className="text-xs text-muted-foreground">Trucks</div></div>
-              <div className="rounded-lg bg-muted p-3"><div className="text-xl font-bold">1.2k</div><div className="text-xs text-muted-foreground">Pickups</div></div>
-              <div className="rounded-lg bg-muted p-3"><div className="text-xl font-bold">98%</div><div className="text-xs text-muted-foreground">On time</div></div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xl font-bold">{stats.trucksOnRoute}</div>
+                <div className="text-xs text-muted-foreground">Trucks</div>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xl font-bold">{stats.pickupsToday}</div>
+                <div className="text-xs text-muted-foreground">Pickups</div>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <div className="text-xl font-bold">{stats.openComplaints > 0 ? "92%" : "98%"}</div>
+                <div className="text-xs text-muted-foreground">On time</div>
+              </div>
             </div>
           </div>
         </div>
@@ -108,58 +148,63 @@ export default function Home() {
       <section id="features" className="border-y bg-card/40">
         <div className="max-w-6xl mx-auto px-6 py-16 grid md:grid-cols-4 gap-6">
           {features.map((f) => (
-            <div key={f.t} className="rounded-xl bg-card p-5 border">
-              <f.icon className="h-6 w-6 text-primary mb-3" />
-              <div className="font-semibold">{f.t}</div>
-              <div className="text-sm text-muted-foreground mt-1">{f.d}</div>
+            <div key={f.t} className="space-y-2">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                <f.icon className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold">{f.t}</h3>
+              <p className="text-sm text-muted-foreground">{f.d}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section id="dashboards" className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold">Three dashboards, one system</h2>
-          <p className="text-muted-foreground mt-2">Every role has a purpose-built workspace.</p>
+        <div className="text-center max-w-xl mx-auto mb-12">
+          <h2 className="text-3xl font-bold tracking-tight">Three portals. One system.</h2>
+          <p className="mt-2 text-muted-foreground">
+            Tailored interfaces for residents, drivers on route, and operations managers.
+          </p>
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {dashboards.map((d) => (
-            <Link key={d.title} to={d.to} state={d.state} className="group rounded-2xl border bg-card p-6 hover:shadow-lg transition-shadow">
-              <div className={`h-11 w-11 rounded-xl ${d.tone} text-primary-foreground flex items-center justify-center mb-4`}>
-                <d.icon className="h-5 w-5" />
+            <Link key={d.title} to={d.to} state={d.state} className="group rounded-2xl border bg-card p-6 hover:shadow-lg transition">
+              <div className={`h-12 w-12 rounded-xl ${d.tone} text-white flex items-center justify-center`}>
+                <d.icon className="h-6 w-6" />
               </div>
-              <div className="text-xl font-semibold">{d.title} dashboard</div>
+              <h3 className="text-lg font-semibold mt-4 group-hover:text-primary transition">{d.title} Portal</h3>
               <p className="text-sm text-muted-foreground mt-2">{d.desc}</p>
-              <div className="mt-4 inline-flex items-center gap-1 text-sm text-primary font-medium">
-                Open <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-              </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <section id="how" className="max-w-6xl mx-auto px-6 pb-24">
-        <div className="rounded-2xl bg-sidebar text-sidebar-foreground p-10 md:p-14 grid md:grid-cols-2 gap-8 items-center">
-          <div>
-            <h3 className="text-2xl md:text-3xl font-bold">Ready to modernize collection in your area?</h3>
-            <p className="opacity-80 mt-3">Pick a role to explore the demo. All three dashboards are wired with sample data.</p>
+      <section id="how" className="border-t bg-card/20">
+        <div className="max-w-6xl mx-auto px-6 py-20">
+          <div className="text-center max-w-xl mx-auto mb-12">
+            <h2 className="text-3xl font-bold tracking-tight">How CleanTrack works</h2>
+            <p className="mt-2 text-muted-foreground">
+              A closed-loop system connecting residents, drivers, and operations.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-3 md:justify-end">
-            <Link to="/login" state={{ portal: "user" }} className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground px-5 py-3 font-medium">Resident</Link>
-            <Link to="/login" state={{ portal: "driver" }} className="rounded-lg bg-sidebar-accent text-sidebar-accent-foreground px-5 py-3 font-medium">Driver</Link>
-            <Link to="/login" state={{ portal: "admin" }} className="rounded-lg bg-card text-card-foreground px-5 py-3 font-medium">Admin</Link>
+          <div className="grid md:grid-cols-3 gap-10">
+            {[
+              { s: "1", t: "Schedules & requests", d: "Residents check weekly pickup schedules or request bulk/hazardous waste collection." },
+              { s: "2", t: "Smart routing", d: "Admins assign trucks and optimize streets based on real-time collection requests." },
+              { s: "3", t: "Live tracking", d: "Drivers update progress as they complete stops, updating the resident maps instantly." },
+            ].map((step) => (
+              <div key={step.s} className="relative space-y-3">
+                <div className="text-5xl font-extrabold text-primary/10">{step.s}</div>
+                <h3 className="font-semibold text-lg">{step.t}</h3>
+                <p className="text-sm text-muted-foreground">{step.d}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <footer className="border-t">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Leaf className="h-4 w-4 text-primary" />
-            <span>{APP_NAME}</span>
-          </div>
-          <span>© {new Date().getFullYear()} {APP_NAME}. All rights reserved.</span>
-        </div>
+      <footer className="border-t bg-card/60 backdrop-blur py-8 text-center text-sm text-muted-foreground">
+        <p>&copy; {new Date().getFullYear()} {APP_NAME}. All rights reserved.</p>
       </footer>
     </div>
   );

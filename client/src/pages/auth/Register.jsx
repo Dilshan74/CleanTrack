@@ -4,6 +4,7 @@ import { Leaf, User, Mail, Lock, Phone, MapPin, Hash, AlertCircle } from "lucide
 import { useAuth } from "../../hooks/useAuth";
 import { APP_NAME, ROLES, ROLE_HOME } from "../../utils/constants";
 import { validateRegister, hasErrors } from "../../utils/helpers";
+import { useJsApiLoader } from "@react-google-maps/api";
 
 export default function Register() {
   const { register, loading } = useAuth();
@@ -19,11 +20,44 @@ export default function Register() {
   });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
+  const [geocodeTimeout, setGeocodeTimeout] = useState(null);
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
+  });
 
   function update(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
     setServerError("");
     setErrors((e) => ({ ...e, [key]: undefined }));
+  }
+
+  function handleAddressChange(val) {
+    update("address", val);
+    
+    if (geocodeTimeout) clearTimeout(geocodeTimeout);
+    
+    const timeout = setTimeout(() => {
+      if (!val || val.length < 5) return;
+      if (window.google && window.google.maps) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: val }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            let pCode = "";
+            for (const component of results[0].address_components) {
+              if (component.types.includes("postal_code")) {
+                pCode = component.long_name;
+                break;
+              }
+            }
+            if (pCode) {
+              setForm((f) => ({ ...f, postalCode: pCode }));
+            }
+          }
+        });
+      }
+    }, 800);
+    setGeocodeTimeout(timeout);
   }
 
   async function handleSubmit(e) {
@@ -120,8 +154,8 @@ export default function Register() {
                 <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                 <input
                   value={form.address}
-                  onChange={(e) => update("address", e.target.value)}
-                  placeholder="42 Maple Ave, Elm District"
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  placeholder="142 Galle Road, Colombo 03"
                   className="w-full bg-transparent py-2 outline-none"
                 />
               </div>

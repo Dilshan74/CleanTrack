@@ -34,11 +34,23 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    driverService.getProfile().then(setProfile);
+    driverService.getProfile().then((data) => {
+      setProfile(data);
+      if (data?.preferences) {
+        setPrefs(data.preferences);
+      }
+    });
   }, []);
 
-  function set(key, value) {
-    setPrefs((p) => ({ ...p, [key]: value }));
+  async function set(key, value) {
+    const nextPrefs = { ...prefs, [key]: value };
+    setPrefs(nextPrefs);
+    try {
+      await driverService.updatePreferences(nextPrefs);
+    } catch (err) {
+      // Revert if API fails
+      setPrefs(prefs);
+    }
   }
 
   function handleLogout() {

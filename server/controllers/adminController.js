@@ -194,11 +194,44 @@ const getCollections = async (req, res) => {
 
 const getReports = async (req, res) => {
     try {
-        const [totalHistory, pendingRequests, allRequests] = await Promise.all([
+        const now = new Date();
+
+        // This month boundaries
+        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const thisMonthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // Last month boundaries
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+        const [
+            totalHistory,
+            thisMonthHistory,
+            lastMonthHistory,
+            pendingRequests,
+            approvedRequests,
+            collectedRequests,
+            totalUsers,
+            totalDrivers,
+        ] = await Promise.all([
             CollectionHistory.countDocuments(),
+            CollectionHistory.countDocuments({ createdAt: { $gte: thisMonthStart, $lte: thisMonthEnd } }),
+            CollectionHistory.countDocuments({ createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd } }),
             CollectionRequest.countDocuments({ status: "Pending" }),
-            CollectionRequest.find().select("status createdAt")
+            CollectionRequest.countDocuments({ status: "Approved" }),
+            CollectionRequest.countDocuments({ status: "Collected" }),
+            User.countDocuments({ role: "user" }),
+            Driver.countDocuments(),
         ]);
+
+        // Growth: compare this month vs last month collections
+        let growthPct = 0;
+        if (lastMonthHistory > 0) {
+            growthPct = Math.round(((thisMonthHistory - lastMonthHistory) / lastMonthHistory) * 100);
+        } else if (thisMonthHistory > 0) {
+            growthPct = 100;
+        }
+        const growthStr = growthPct >= 0 ? `+${growthPct}%` : `${growthPct}%`;
 
         // Monthly volume for last 12 months
         const monthlyVolume = [];
@@ -206,31 +239,43 @@ const getReports = async (req, res) => {
             const d = new Date();
             d.setMonth(d.getMonth() - i);
             const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-            const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            const monthEnd   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
             const count = await CollectionHistory.countDocuments({
                 createdAt: { $gte: monthStart, $lte: monthEnd }
             });
             monthlyVolume.push(count);
         }
 
-        // Complaint categories
+        // Complaint categories by garbage type
         const complaintAgg = await CollectionRequest.aggregate([
             { $group: { _id: "$garbageType", count: { $sum: 1 } } },
             { $sort: { count: -1 } }
         ]);
-        const complaintCategories = complaintAgg.map(c => ({ l: c._id || "Other", v: c.count }));
+        const complaintCategories = complaintAgg.length
+            ? complaintAgg.map(c => ({ l: c._id || "Other", v: c.count }))
+            : [
+                { l: "Pending",   v: pendingRequests   || 0 },
+                { l: "Approved",  v: approvedRequests  || 0 },
+                { l: "Collected", v: collectedRequests || 0 },
+              ];
+
+        // Recycling rate: collected / (collected + pending + approved) * 100
+        const totalRequests = pendingRequests + approvedRequests + collectedRequests;
+        const recyclingRate = totalRequests > 0
+            ? Math.round((collectedRequests / totalRequests) * 100)
+            : 0;
 
         res.json({
             success: true,
             wasteCollected: `${totalHistory} collections`,
-            recycled: "N/A",
-            avgDelay: "N/A",
-            growth: "+0%",
+            recycled: `${recyclingRate}%`,
+            avgDelay: `${totalUsers} users`,
+            growth: growthStr,
+            totalUsers,
+            totalDrivers,
+            pendingRequests,
             monthlyVolume,
-            complaintCategories: complaintCategories.length ? complaintCategories : [
-                { l: "Pending", v: pendingRequests },
-                { l: "Total", v: allRequests.length }
-            ]
+            complaintCategories,
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -273,11 +318,53 @@ const updateComplaintStatus = async (req, res) => {
 
 const getNotificationsForAdmin = async (req, res) => {
     try {
-        const notifications = await Notification.find()
+        // 1. Get stored database notifications
+        const dbNotifs = await Notification.find()
             .sort({ createdAt: -1 })
-            .limit(50)
+            .limit(30)
             .populate("receiver", "fullName email");
-        res.json({ success: true, notifications });
+
+        // 2. Synthesize complaints notifications (CollectionRequests)
+        const CollectionRequest = require("../models/collectionRequest");
+        const complaints = await CollectionRequest.find()
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .populate("user", "fullName");
+
+        const complaintNotifs = complaints.map((c) => ({
+            _id: `complaint-${c._id}`,
+            title: `New Complaint: ${c.garbageType}`,
+            message: `User ${c.user?.fullName || "Resident"} reported a complaint: "${c.description || ""}". Status: ${c.status}.`,
+            notificationType: "Request",
+            tone: c.status === "Pending" ? "destructive" : "success",
+            isRead: c.status !== "Pending",
+            createdAt: c.createdAt
+        }));
+
+        // 3. Synthesize truck/fleet alerts
+        const Truck = require("../models/truck");
+        const trucks = await Truck.find({ status: { $in: ["Maintenance", "Out of Service"] } }).limit(10);
+        const truckNotifs = trucks.map((t) => ({
+            _id: `truck-${t._id}`,
+            title: `Fleet Alert: Truck ${t.plateNumber}`,
+            message: `Truck ${t.plateNumber} is currently marked as ${t.status}.`,
+            notificationType: "Route",
+            tone: "warning",
+            isRead: false,
+            createdAt: t.updatedAt || t.createdAt
+        }));
+
+        // Merge all and sort by newest first
+        const all = [
+            ...dbNotifs.map((n) => ({
+                ...n.toObject(),
+                tone: n.notificationType === "Route" ? "warning" : "primary"
+            })),
+            ...complaintNotifs,
+            ...truckNotifs
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, notifications: all });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

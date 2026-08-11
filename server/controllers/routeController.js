@@ -4,27 +4,60 @@ const Route = require("../models/route.js");
 // Add Route
 
 exports.addRoute = async(req,res)=>{
-
 try{
+    const { startPoint, endPoint } = req.body;
+    if (!startPoint || !startPoint.name || startPoint.latitude === undefined || startPoint.longitude === undefined) {
+        return res.status(400).json({ success: false, message: "Start point is required with valid name, latitude and longitude." });
+    }
+    if (!endPoint || !endPoint.name || endPoint.latitude === undefined || endPoint.longitude === undefined) {
+        return res.status(400).json({ success: false, message: "End point is required with valid name, latitude and longitude." });
+    }
+    if (isNaN(startPoint.latitude) || isNaN(startPoint.longitude) || isNaN(endPoint.latitude) || isNaN(endPoint.longitude)) {
+        return res.status(400).json({ success: false, message: "Start and End point coordinates must be valid numbers." });
+    }
+    if (Number(startPoint.latitude) === Number(endPoint.latitude) && Number(startPoint.longitude) === Number(endPoint.longitude)) {
+        return res.status(400).json({ success: false, message: "Start and End points cannot be exactly identical." });
+    }
 
-const route = await Route.create(req.body);
+    const route = await Route.create(req.body);
 
+    // Sync Driver's assignedRoute and vehicleNumber if assigned during creation
+    if (req.body.assignedDriver) {
+        const Driver = require("../models/driver.js");
+        const updateData = { assignedRoute: route._id };
+        if (req.body.assignedTruck) {
+            updateData.vehicleNumber = req.body.assignedTruck;
+            const Truck = require("../models/truck.js");
+            await Truck.findByIdAndUpdate(req.body.assignedTruck, { assignedDriver: req.body.assignedDriver });
+        }
+        await Driver.findByIdAndUpdate(req.body.assignedDriver, updateData);
+    }
 
-res.status(201).json({
-success:true,
-message:"Route created",
-route
-});
+    // Create admin panel notification for new route
+    try {
+        const Notification = require("../models/notification.js");
+        await Notification.create({
+            receiver: req.user.id,
+            receiverType: "Admin",
+            title: "New Route Created",
+            message: `Route "${route.routeName}" has been added from ${startPoint.name} to ${endPoint.name}.`,
+            notificationType: "Route",
+            isRead: false
+        });
+    } catch (notifErr) {
+        console.error("Failed to create route notification:", notifErr.message);
+    }
 
-
+    res.status(201).json({
+        success:true,
+        message:"Route created",
+        route
+    });
 }catch(error){
-
-res.status(500).json({
-message:error.message
-});
-
+    res.status(500).json({
+        message:error.message
+    });
 }
-
 };
 
 
@@ -62,37 +95,77 @@ message:error.message
 // Update Route
 
 exports.updateRoute = async(req,res)=>{
-
 try{
+    const { startPoint, endPoint } = req.body;
+    if (startPoint !== undefined || endPoint !== undefined) {
+        let sp = startPoint;
+        let ep = endPoint;
+        if (!sp || !ep) {
+            const currentRoute = await Route.findById(req.params.id);
+            if (currentRoute) {
+                if (!sp) sp = currentRoute.startPoint;
+                if (!ep) ep = currentRoute.endPoint;
+            }
+        }
+        if (sp || ep) {
+            if (!sp || !sp.name || sp.latitude === undefined || sp.longitude === undefined) {
+                return res.status(400).json({ success: false, message: "Start point is required with valid name, latitude and longitude." });
+            }
+            if (!ep || !ep.name || ep.latitude === undefined || ep.longitude === undefined) {
+                return res.status(400).json({ success: false, message: "End point is required with valid name, latitude and longitude." });
+            }
+            if (isNaN(sp.latitude) || isNaN(sp.longitude) || isNaN(ep.latitude) || isNaN(ep.longitude)) {
+                return res.status(400).json({ success: false, message: "Start and End point coordinates must be valid numbers." });
+            }
+            if (Number(sp.latitude) === Number(ep.latitude) && Number(sp.longitude) === Number(ep.longitude)) {
+                return res.status(400).json({ success: false, message: "Start and End points cannot be exactly identical." });
+            }
+        }
+    }
 
+    const oldRoute = await Route.findById(req.params.id);
+    const route = await Route.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new:true }
+    );
 
-const route = await Route.findByIdAndUpdate(
+    // Sync Driver and Truck assignments
+    const Driver = require("../models/driver.js");
+    const Truck = require("../models/truck.js");
 
-req.params.id,
+    const driverId = req.body.assignedDriver !== undefined ? req.body.assignedDriver : (route ? route.assignedDriver : null);
+    const truckId = req.body.assignedTruck !== undefined ? req.body.assignedTruck : (route ? route.assignedTruck : null);
 
-req.body,
+    // 1. Clear old driver's assignments if driver changed
+    if (req.body.assignedDriver !== undefined && oldRoute && oldRoute.assignedDriver && oldRoute.assignedDriver.toString() !== req.body.assignedDriver) {
+        await Driver.findByIdAndUpdate(oldRoute.assignedDriver, { assignedRoute: null, vehicleNumber: null });
+        if (oldRoute.assignedTruck) {
+            await Truck.findByIdAndUpdate(oldRoute.assignedTruck, { assignedDriver: null });
+        }
+    }
 
-{
-new:true
-}
+    // 2. Set new driver's assignments
+    if (driverId) {
+        const updateData = { assignedRoute: route._id };
+        if (truckId) {
+            updateData.vehicleNumber = truckId;
+            await Truck.findByIdAndUpdate(truckId, { assignedDriver: driverId });
+        } else {
+            updateData.vehicleNumber = null;
+        }
+        await Driver.findByIdAndUpdate(driverId, updateData);
+    }
 
-);
-
-
-res.json({
-success:true,
-route
-});
-
-
+    res.json({
+        success:true,
+        route
+    });
 }catch(error){
-
-res.status(500).json({
-message:error.message
-});
-
+    res.status(500).json({
+        message:error.message
+    });
 }
-
 };
 
 

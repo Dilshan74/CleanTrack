@@ -36,6 +36,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     adminService.getOverview().then(setData);
+
+    const interval = setInterval(() => {
+      adminService.getOverview().then(setData);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (!data) return <Loader label="Loading overview…" />;

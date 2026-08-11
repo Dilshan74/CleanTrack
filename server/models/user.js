@@ -35,6 +35,16 @@ const userSchema = new mongoose.Schema(
             trim: true,
             default: ""
         },
+        nationalId: {
+            type: String,
+            trim: true,
+            default: ""
+        },
+        preferences: {
+            emailAlerts: { type: Boolean, default: true },
+            smsAlerts: { type: Boolean, default: false },
+            pickupReminders: { type: Boolean, default: true }
+        },
         role: {
             type: String,
             enum: ["user", "driver", "admin"],
@@ -43,6 +53,10 @@ const userSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true
+        },
+        profilePicture: {
+            type: String,
+            default: ""
         }
     },
     {

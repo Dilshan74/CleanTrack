@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { GoogleMap, useJsApiLoader, MarkerF } from "@react-google-maps/api";
+﻿import { useEffect, useState, useRef, useCallback } from "react";
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF } from "@react-google-maps/api";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../../utils/constants";
 import {
@@ -65,13 +65,6 @@ const USER_SVG = encodeURIComponent(`
 </svg>`);
 
 // ─── Component ─────────────────────────────────────────────────────────────────
-/**
- * LiveTrackingMap — premium UI showing truck + user locations.
- *
- * Props:
- *   routeId, driverId, driverName, truckPlate, collectionStatus,
- *   postalCode, routeName, collectionTime, onClose
- */
 export default function LiveTrackingMap({
   routeId,
   driverId,
@@ -92,6 +85,8 @@ export default function LiveTrackingMap({
   const [speed,        setSpeed]        = useState(0);
   const [liveRouteName, setLiveRouteName] = useState(routeName || "");
   const [livePlate,    setLivePlate]    = useState(truckPlate || "");
+  const [startPoint,   setStartPoint]   = useState(null);
+  const [endPoint,     setEndPoint]     = useState(null);
 
   const socketRef = useRef(null);
   const pollRef   = useRef(null);
@@ -101,7 +96,6 @@ export default function LiveTrackingMap({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
   });
 
-  // ── Marker icons (created after Google Maps loads) ──
   const truckIcon = isLoaded ? {
     url: `data:image/svg+xml;charset=UTF-8,${TRUCK_SVG}`,
     scaledSize: new window.google.maps.Size(56, 56),
@@ -114,7 +108,6 @@ export default function LiveTrackingMap({
     anchor:     new window.google.maps.Point(20, 20),
   } : null;
 
-  // ── Apply location update ──
   const applyLocation = useCallback((data) => {
     const lat = data.lat ?? data.latitude;
     const lng = data.lng ?? data.longitude;
@@ -126,7 +119,6 @@ export default function LiveTrackingMap({
     setTrackStatus("tracking");
   }, []);
 
-  // ── REST poll ──
   const pollLocation = useCallback(async () => {
     try {
       const params = postalCode ? `?postalCode=${encodeURIComponent(postalCode)}` : "";
@@ -134,6 +126,8 @@ export default function LiveTrackingMap({
 
       if (data.route?.name)         setLiveRouteName(data.route.name);
       if (data.truck?.plateNumber)  setLivePlate(data.truck.plateNumber);
+      if (data.route?.startPoint)   setStartPoint(data.route.startPoint);
+      if (data.route?.endPoint)     setEndPoint(data.route.endPoint);
 
       if (data.success && data.tracking && data.location) {
         applyLocation({
@@ -154,7 +148,6 @@ export default function LiveTrackingMap({
     }
   }, [applyLocation, postalCode]);
 
-  // ── Socket + polling setup ──
   useEffect(() => {
     if (!driverId) return;
 
@@ -180,10 +173,8 @@ export default function LiveTrackingMap({
       socket.disconnect();
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driverId, routeId, postalCode]);
+  }, [driverId, routeId, postalCode, applyLocation, pollLocation]);
 
-  // ── User geolocation ──
   useEffect(() => {
     if (!navigator.geolocation) return;
     const id = navigator.geolocation.watchPosition(
@@ -194,13 +185,11 @@ export default function LiveTrackingMap({
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  // ── "Updated X ago" ticker ──
   useEffect(() => {
     const t = setInterval(() => setTimeAgo(timeAgoLabel(lastUpdated)), 1000);
     return () => clearInterval(t);
   }, [lastUpdated]);
 
-  // ── Stop polling on completed ──
   useEffect(() => {
     if (collectionStatus === "Completed") {
       setTrackStatus("completed");
@@ -208,11 +197,9 @@ export default function LiveTrackingMap({
     }
   }, [collectionStatus]);
 
-  // ── Map pan helpers ──
   const panToUser  = () => { if (userPos  && mapRef.current) { mapRef.current.panTo(userPos);  mapRef.current.setZoom(16); } };
   const panToTruck = () => { if (truckPos && mapRef.current) { mapRef.current.panTo(truckPos); mapRef.current.setZoom(16); } };
 
-  // ── Derived values ──
   const displayRouteName = liveRouteName || routeName || postalCode || "—";
   const displayPlate     = livePlate     || truckPlate || "—";
   const distKm           = (truckPos && userPos)
@@ -222,7 +209,6 @@ export default function LiveTrackingMap({
 
   const mapCenter = truckPos || userPos || DEFAULT_CENTER;
 
-  // ── Status indicator ──
   const statusColor =
     trackStatus === "tracking"  ? "text-emerald-500" :
     trackStatus === "completed" ? "text-blue-400"    : "text-amber-400";
@@ -248,61 +234,22 @@ export default function LiveTrackingMap({
           )}
         </div>
         {onClose && (
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-muted text-muted-foreground transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button onClick={onClose} className="rounded-lg border px-3 py-1.5 text-xs hover:bg-muted font-semibold transition-colors">
+            Close Map
           </button>
         )}
       </div>
 
-      {/* ── Body: Map + Details ── */}
-      <div className="flex flex-1 overflow-hidden">
-
+      {/* ── Body (Map + Sidebar) ── */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        
         {/* Map */}
-        <div className="flex-1 relative overflow-hidden">
-
-          {/* Map / Satellite toggle */}
-          <div className="absolute top-3 left-3 z-10 flex overflow-hidden rounded-lg border bg-card shadow-sm text-xs font-medium">
-            <button
-              onClick={() => setMapType("roadmap")}
-              className={`px-3 py-1.5 transition-colors ${mapType === "roadmap" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            >
-              Map
-            </button>
-            <button
-              onClick={() => setMapType("satellite")}
-              className={`px-3 py-1.5 transition-colors ${mapType === "satellite" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            >
-              Satellite
-            </button>
-          </div>
-
-          {/* Waiting overlay */}
-          {trackStatus !== "tracking" && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/70 backdrop-blur-[2px]">
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-primary mb-4">
-                <Navigation className={`h-6 w-6 text-primary ${trackStatus === "waiting" ? "animate-bounce" : ""}`} />
-              </div>
-              {trackStatus === "completed" ? (
-                <>
-                  <p className="font-semibold text-emerald-500">Collection Completed</p>
-                  <p className="text-xs text-muted-foreground mt-1">Today's collection is done.</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold">Waiting for Truck Location</p>
-                  <p className="text-xs text-muted-foreground mt-1">The driver has not started tracking yet.</p>
-                </>
-              )}
-            </div>
-          )}
-
+        <div className="flex-1 relative h-full">
           {isLoaded ? (
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
               center={mapCenter}
-              zoom={15}
+              zoom={14}
               mapTypeId={mapType}
               options={{
                 disableDefaultUI: true,
@@ -310,8 +257,51 @@ export default function LiveTrackingMap({
                 fullscreenControl: true,
                 styles:           LIGHT_STYLES,
               }}
-              onLoad={(map) => { mapRef.current = map; }}
+              onLoad={(map) => {
+                mapRef.current = map;
+                // Fit bounds to show start and end point + user & truck
+                const bounds = new window.google.maps.LatLngBounds();
+                let hasBounds = false;
+                if (startPoint?.latitude) { bounds.extend({ lat: startPoint.latitude, lng: startPoint.longitude }); hasBounds = true; }
+                if (endPoint?.latitude) { bounds.extend({ lat: endPoint.latitude, lng: endPoint.longitude }); hasBounds = true; }
+                if (userPos) { bounds.extend(userPos); hasBounds = true; }
+                if (truckPos) { bounds.extend(truckPos); hasBounds = true; }
+                if (hasBounds) {
+                  map.fitBounds(bounds);
+                }
+              }}
             >
+              {/* Start Point Marker */}
+              {startPoint && startPoint.latitude && (
+                <MarkerF
+                  position={{ lat: startPoint.latitude, lng: startPoint.longitude }}
+                  icon="http://maps.google.com/mapfiles/ms/icons/green-dot.png"
+                  title={`Start: ${startPoint.name}`}
+                  zIndex={8}
+                />
+              )}
+
+              {/* End Point Marker */}
+              {endPoint && endPoint.latitude && (
+                <MarkerF
+                  position={{ lat: endPoint.latitude, lng: endPoint.longitude }}
+                  icon="http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                  title={`End: ${endPoint.name}`}
+                  zIndex={8}
+                />
+              )}
+
+              {/* Route Polyline */}
+              {startPoint?.latitude && endPoint?.latitude && (
+                <PolylineF
+                  path={[
+                    { lat: startPoint.latitude, lng: startPoint.longitude },
+                    { lat: endPoint.latitude, lng: endPoint.longitude }
+                  ]}
+                  options={{ strokeColor: "#16a34a", strokeOpacity: 0.8, strokeWeight: 4 }}
+                />
+              )}
+
               {/* Truck marker */}
               {truckPos && truckIcon && (
                 <MarkerF
@@ -351,8 +341,20 @@ export default function LiveTrackingMap({
         </div>
 
         {/* ── Tracking Details Panel ── */}
-        <div className="w-60 shrink-0 border-l bg-card overflow-y-auto p-5 space-y-5">
-          <h3 className="font-semibold text-base">Tracking Details</h3>
+        <div className="w-64 shrink-0 border-l bg-card overflow-y-auto p-5 space-y-5">
+          <h3 className="font-semibold text-base border-b pb-2">Tracking Details</h3>
+
+          {/* Start Point */}
+          <div className="space-y-0.5">
+            <p className="text-xs text-muted-foreground font-semibold">📍 Start Point</p>
+            <p className="text-sm font-medium">{startPoint?.name || "—"}</p>
+          </div>
+
+          {/* End Point */}
+          <div className="space-y-0.5">
+            <p className="text-xs text-muted-foreground font-semibold">🏁 End Point</p>
+            <p className="text-sm font-medium">{endPoint?.name || "—"}</p>
+          </div>
 
           {/* Driver */}
           <DetailRow icon={<User className="h-4 w-4 text-muted-foreground" />} label="Driver" value={driverName || "—"} />
@@ -372,12 +374,15 @@ export default function LiveTrackingMap({
             </p>
           </div>
 
-          {/* Coordinates */}
-          <DetailRow
-            icon={<MapPin className="h-4 w-4 text-muted-foreground" />}
-            label="Coordinates"
-            value={truckPos ? `${fmt(truckPos.lat, 5)}, ${fmt(truckPos.lng, 5)}` : "—"}
-          />
+          {/* Distance */}
+          {distKm !== null && (
+            <DetailRow
+              icon={<MapPin className="h-4 w-4 text-muted-foreground" />}
+              label="Distance to Truck"
+              value={`${distKm.toFixed(2)} km away`}
+              valueClass="text-emerald-500 font-semibold"
+            />
+          )}
 
           {/* Speed */}
           <DetailRow
@@ -449,7 +454,7 @@ export default function LiveTrackingMap({
             disabled={!truckPos}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Truck className="h-4 w-4" />
+            <LocateFixed className="h-4 w-4" />
             Truck Location
           </button>
         </div>
@@ -458,14 +463,13 @@ export default function LiveTrackingMap({
   );
 }
 
-// ─── Sub-component ──────────────────────────────────────────────────────────────
 function DetailRow({ icon, label, value, valueClass }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <div className="mt-0.5 shrink-0">{icon}</div>
+    <div className="flex items-start gap-2.5 text-sm">
+      <span className="mt-0.5">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-sm font-semibold break-words ${valueClass || ""}`}>{value}</p>
+        <p className={`font-medium text-foreground truncate ${valueClass || ""}`}>{value}</p>
       </div>
     </div>
   );

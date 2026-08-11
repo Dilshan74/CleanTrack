@@ -45,7 +45,7 @@ export default function DriverDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <Stat icon={MapPin} label="Stops today" value={data.stopsToday} hint={`${data.stopsToday - data.completed} remaining`} />
         <Stat icon={CheckCircle2} label="Completed" value={data.completed} hint="On track" tone="success" />
-        <Stat icon={Clock} label="ETA next stop" value={data.etaNext} hint="Maple Ave" tone="warning" />
+        <Stat icon={Clock} label="ETA next stop" value={data.etaNext} hint={data.nextStopName || "N/A"} tone="warning" />
         <Stat icon={Truck} label="Truck" value={data.truck} hint={`Fuel ${data.fuel}%`} />
       </div>
 

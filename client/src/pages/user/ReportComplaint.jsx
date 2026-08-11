@@ -7,7 +7,7 @@ export default function ReportComplaint() {
   const [complaints, setComplaints] = useState(null);
   const [form, setForm] = useState({
     category: COMPLAINT_CATEGORIES[0],
-    location: "42 Maple Ave, Elm District",
+    location: "",
     description: "",
   });
   const [error, setError] = useState("");
@@ -81,11 +81,6 @@ export default function ReportComplaint() {
               className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
             />
             {error && <span className="mt-1 block text-xs text-destructive">{error}</span>}
-          </label>
-
-          <label className="block text-sm">
-            <span className="text-muted-foreground">Attach photo (optional)</span>
-            <input type="file" className="mt-1 block text-sm" />
           </label>
 
           <div className="flex justify-end gap-2">

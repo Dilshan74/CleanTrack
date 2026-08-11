@@ -81,13 +81,22 @@ exports.getUserDashboard = async (req, res) => {
             return rest;
         });
 
-        const nextPickup = allUpcoming.length > 0
+        // Calculate next scheduled pickup from routes only, falling back to complaints if no routes exist
+        const routeUpcoming = allUpcoming.filter(u => u.type === "Scheduled Route");
+        const nextPickup = routeUpcoming.length > 0
             ? {
-                when: allUpcoming[0].date,
-                time: allUpcoming[0].time,
-                type: allUpcoming[0].type
+                when: routeUpcoming[0].date,
+                time: routeUpcoming[0].time,
+                type: routeUpcoming[0].type
               }
-            : { when: "No upcoming", time: "N/A", type: "N/A" };
+            : (allUpcoming.length > 0
+                ? {
+                    when: allUpcoming[0].date,
+                    time: allUpcoming[0].time,
+                    type: allUpcoming[0].type
+                  }
+                : { when: "No upcoming", time: "N/A", type: "N/A" }
+              );
 
         const alerts = notifications.slice(0, 3).map(n => n.message || n.title || "New notification");
 
@@ -123,10 +132,10 @@ exports.getUserProfile = async (req, res) => {
 // 2. Update profile
 exports.updateUserProfile = async (req, res) => {
     try {
-        const { fullName, phone, address, postalCode } = req.body;
+        const { fullName, phone, address, postalCode, nationalId } = req.body;
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            { fullName, phone, address, postalCode },
+            { fullName, phone, address, postalCode, nationalId },
             { new: true, runValidators: true }
         ).select("-password");
 
@@ -138,6 +147,77 @@ exports.updateUserProfile = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// 2c. Change password
+exports.changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, message: "Current password and new password are required." });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: "New password must be at least 6 characters." });
+        }
+
+        const bcrypt = require("bcryptjs");
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ success: false, message: "Current password is incorrect." });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        res.json({ success: true, message: "Password updated successfully." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
+exports.uploadProfilePicture = async (req, res) => {
+    try {
+        const { profilePicture } = req.body;
+
+        if (!profilePicture) {
+            return res.status(400).json({ success: false, message: "No image data provided" });
+        }
+
+        // Basic validation: must be a data URI (base64 image)
+        if (!profilePicture.startsWith("data:image/")) {
+            return res.status(400).json({ success: false, message: "Invalid image format" });
+        }
+
+        // Limit size to ~2MB (base64 is ~1.33x raw size)
+        const sizeBytes = Buffer.byteLength(profilePicture, "utf8");
+        if (sizeBytes > 2 * 1024 * 1024 * 1.5) {
+            return res.status(400).json({ success: false, message: "Image too large. Max 2MB." });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { profilePicture },
+            { new: true }
+        ).select("-password");
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        res.json({ success: true, message: "Profile picture updated", profilePicture: user.profilePicture });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
 
 // 3. Create garbage collection request
 exports.createCollectionRequest = async (req, res) => {
@@ -223,15 +303,77 @@ exports.getUserSchedule = async (req, res) => {
     }
 };
 
-// 6. View my notifications
+// 6. View my notifications (DB + synthesized from complaints & schedule)
 exports.getUserNotifications = async (req, res) => {
     try {
-        const notifications = await Notification.find({ receiver: req.user.id }).sort({ createdAt: -1 });
-        res.json({ success: true, data: notifications });
+        const userId = req.user.id;
+
+        // 6a. Stored notifications addressed to this user
+        const storedNotifs = await Notification.find({ receiver: userId }).sort({ createdAt: -1 }).limit(30);
+
+        // 6b. User's own complaint (CollectionRequest) activity
+        const requests = await CollectionRequest.find({ user: userId }).sort({ updatedAt: -1 }).limit(20);
+
+        const complaintNotifs = requests.map((r) => {
+            const statusMap = {
+                Pending:   { title: "Complaint received",   msg: `Your ${r.garbageType} complaint is pending review.`,             tone: "warning" },
+                Approved:  { title: "Complaint approved",   msg: `Your ${r.garbageType} complaint has been approved.`,              tone: "success" },
+                Collected: { title: "Complaint resolved",   msg: `Your ${r.garbageType} complaint has been resolved. Thank you!`,   tone: "success" },
+                Rejected:  { title: "Complaint rejected",   msg: `Your ${r.garbageType} complaint was rejected. Contact support.`,  tone: "destructive" },
+            };
+            const s = statusMap[r.status] || { title: "Complaint update", msg: `Status: ${r.status}`, tone: "primary" };
+            return {
+                _id:              `complaint-${r._id}`,
+                title:            s.title,
+                message:          s.msg,
+                notificationType: "Request",
+                tone:             s.tone,
+                isRead:           r.status === "Pending" ? false : true,
+                createdAt:        r.updatedAt || r.createdAt,
+            };
+        });
+
+        // 6c. Schedule reminders — routes matching user's postal code
+        const user = await User.findById(userId).select("postalCode");
+        const userPostalCode = (user?.postalCode || "").trim();
+
+        let scheduleNotifs = [];
+        if (userPostalCode) {
+            const routes = await Route.find({ postalCode: userPostalCode, status: "Active" })
+                .select("routeName collectionTime postalCode")
+                .sort({ collectionTime: 1 })
+                .limit(5);
+
+            scheduleNotifs = routes.map((r) => {
+                const timeLabel = r.collectionTime
+                    ? `Scheduled: ${r.collectionTime}`
+                    : "Schedule pending";
+                return {
+                    _id:              `schedule-${r._id}`,
+                    title:            "Collection schedule",
+                    message:          `${r.routeName} — ${timeLabel} in your area (${userPostalCode}).`,
+                    notificationType: "Route",
+                    tone:             "primary",
+                    isRead:           false,
+                    createdAt:        new Date(),
+                };
+            });
+        }
+
+        // Merge all sources and sort newest first
+        const all = [
+            ...storedNotifs.map((n) => ({ ...n.toObject(), tone: n.notificationType === "Route" ? "warning" : "primary" })),
+            ...complaintNotifs,
+            ...scheduleNotifs,
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, data: all });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
 
 // 7. View my collection history
 exports.getUserHistory = async (req, res) => {
@@ -325,6 +467,23 @@ exports.getTruckLocation = async (req, res) => {
                 updatedAt: new Date().toISOString(),
             },
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateUserPreferences = async (req, res) => {
+    try {
+        const { preferences } = req.body;
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { preferences },
+            { new: true }
+        ).select("-password");
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        res.json({ success: true, data: user });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

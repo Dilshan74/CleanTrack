@@ -41,6 +41,20 @@ const routeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    routeDescription: {
+        type: String,
+        default: ""
+    },
+    startPoint: {
+        name: { type: String },
+        latitude: { type: Number },
+        longitude: { type: Number }
+    },
+    endPoint: {
+        name: { type: String },
+        latitude: { type: Number },
+        longitude: { type: Number }
+    },
     areas: [areaSchema],
     collectionTime: {
         type: String,

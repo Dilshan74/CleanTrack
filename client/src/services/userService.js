@@ -159,17 +159,22 @@ export function getNotifications() {
         time: n.createdAt
           ? new Date(n.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
           : "—",
+        date: n.createdAt
+          ? new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : "",
         unread: !n.isRead,
-        tone: n.notificationType === "Route" ? "warning"
-            : n.notificationType === "Request" ? "primary"
-            : "primary",
+        type: n.notificationType || "System",
+        tone: n.tone || (
+          n.notificationType === "Route" ? "primary"
+          : n.notificationType === "Request" ? "warning"
+          : "primary"
+        ),
       }));
     },
     () => [
-      { id: 1, title: "Pickup reminder", body: "Recyclables collected tomorrow at 7:30 AM.", time: "2h ago", unread: true, tone: "primary" },
-      { id: 2, title: "Complaint update", body: "Your complaint #C-204 is being reviewed.", time: "1d ago", unread: true, tone: "warning" },
-      { id: 3, title: "Schedule change", body: "Friday organic pickup moved to 8:00 AM.", time: "2d ago", unread: false, tone: "muted" },
-      { id: 4, title: "Recycling milestone", body: "You recycled 42 kg this month. Great job!", time: "4d ago", unread: false, tone: "success" },
+      { id: 1, title: "Pickup reminder", body: "Recyclables collected tomorrow at 7:30 AM.", time: "2h ago", date: "Today", unread: true, type: "Route", tone: "primary" },
+      { id: 2, title: "Complaint update", body: "Your complaint is being reviewed.", time: "1d ago", date: "Yesterday", unread: true, type: "Request", tone: "warning" },
+      { id: 3, title: "Schedule change", body: "Friday organic pickup moved to 8:00 AM.", time: "2d ago", date: "Aug 9", unread: false, type: "Route", tone: "primary" },
     ]
   );
 }
@@ -184,8 +189,10 @@ export function getProfile() {
         email: u.email,
         phone: u.phone,
         address: u.address,
-        nationalId: "—", // not in model
+        nationalId: u.nationalId || "",
         postalCode: u.postalCode || "",
+        profilePicture: u.profilePicture || "",
+        preferences: u.preferences || { emailAlerts: true, smsAlerts: false, pickupReminders: true },
       };
     },
     () => ({
@@ -193,8 +200,10 @@ export function getProfile() {
       email: "alex@example.com",
       phone: "+1 (555) 210-4477",
       nationalId: "RES-88214",
-      address: "42 Maple Ave, Elm District",
+      address: "142 Galle Road, Colombo 03",
       zone: "Zone A",
+      profilePicture: "",
+      preferences: { emailAlerts: true, smsAlerts: false, pickupReminders: true }
     }),
   );
 }
@@ -209,6 +218,38 @@ export async function updateProfile(payload) {
   }
 }
 
+export async function uploadProfilePicture(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result;
+        const { data } = await api.post("/user/profile/picture", { profilePicture: base64 });
+        resolve(data);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const { data } = await api.put("/user/profile/password", { currentPassword, newPassword });
+  return data;
+}
+
+export async function updatePreferences(preferences) {
+  try {
+    const { data } = await api.put("/user/preferences", { preferences });
+    return data;
+  } catch (err) {
+    console.error("Failed to update user preferences:", err);
+    throw err;
+  }
+}
+
 export default {
   getDashboard,
   getSchedule,
@@ -217,4 +258,7 @@ export default {
   getNotifications,
   getProfile,
   updateProfile,
+  uploadProfilePicture,
+  changePassword,
+  updatePreferences,
 };

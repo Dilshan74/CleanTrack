@@ -57,6 +57,22 @@ router.put("/start-collection/:id", driverAuth, startCollection);
 // Notifications
 router.get("/notifications", driverAuth, getDriverNotifications);
 
+// Preferences / Settings
+router.put("/preferences", driverAuth, async (req, res) => {
+    try {
+        const { preferences } = req.body;
+        const Driver = require("../models/driver");
+        const updated = await Driver.findByIdAndUpdate(
+            req.driverProfile._id,
+            { preferences },
+            { new: true }
+        );
+        res.json({ success: true, driver: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // ==============================
 // Admin Routes (Manage Drivers)
 // ==============================

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Fuel, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
@@ -100,15 +100,6 @@ export default function ManageTrucks() {
                   <div><div className="text-xs text-muted-foreground">Plate</div><div className="font-medium">{t.plate}</div></div>
                   <div><div className="text-xs text-muted-foreground">Capacity</div><div className="font-medium">{t.capacity}</div></div>
                   <div><div className="text-xs text-muted-foreground">Driver</div><div className="font-medium">{t.driver}</div></div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="flex items-center gap-1 text-muted-foreground"><Fuel className="h-3.5 w-3.5" /> Fuel</span>
-                    <span>{t.fuel}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className={`h-full ${t.fuel < 50 ? "bg-warning" : "bg-success"}`} style={{ width: `${t.fuel}%` }} />
-                  </div>
                 </div>
               </div>
             ))

@@ -400,6 +400,15 @@ exports.getDashboard = async (req, res) => {
         const progress = stopsToday > 0 ? Math.round((completed / stopsToday) * 100) : 0;
 
         const truck = driver.vehicleNumber;
+        let nextStopName = "N/A";
+        if (route && route.areas) {
+            const nextStop = route.areas.find(a => a.status === "Pending");
+            if (nextStop) {
+                nextStopName = nextStop.areaName || "Next stop";
+            } else if (stopsToday > 0) {
+                nextStopName = "All completed";
+            }
+        }
 
         res.json({
             success: true,
@@ -410,6 +419,7 @@ exports.getDashboard = async (req, res) => {
             missed,
             progress,
             etaNext: "N/A",
+            nextStopName,
             etaFinish: route ? route.collectionTime : "N/A",
             fuel: 0,
             remainingKm: "N/A",
@@ -421,16 +431,121 @@ exports.getDashboard = async (req, res) => {
 };
 
 // ==========================================
-// Get Driver Notifications
+// Get Driver Notifications (DB + synthesized)
 // ==========================================
 exports.getDriverNotifications = async (req, res) => {
     try {
-        // Look up notifications by receiver matching the user's ID or driver email
-        const notifications = await Notification.find({ receiver: req.user.id })
+        const driverId  = req.driverProfile._id;
+        const userId    = req.user.id;
+
+        // 1. Stored DB notifications addressed to this user
+        const storedNotifs = await Notification.find({ receiver: userId })
             .sort({ createdAt: -1 })
             .limit(20);
-        res.json({ success: true, notifications });
+
+        // 2. Synthesize route/collection notifications from assigned route
+        const driver = await Driver.findById(driverId)
+            .populate("assignedRoute")
+            .populate("vehicleNumber");
+
+        const routeNotifs = [];
+        const truckNotifs = [];
+
+        if (driver?.assignedRoute) {
+            const route = driver.assignedRoute;
+            const total      = route.areas?.length || 0;
+            const collected  = route.areas?.filter((a) => a.status === "Collected").length || 0;
+            const missed     = route.areas?.filter((a) => a.status === "Missed").length || 0;
+            const pending    = total - collected - missed;
+            const status     = route.collectionStatus || "Pending";
+
+            // Route assignment notification
+            routeNotifs.push({
+                _id:              `route-assigned-${route._id}`,
+                title:            "Route assigned",
+                message:          `You are assigned to Route "${route.routeName}" from ${route.startPoint?.name || "Start"} to ${route.endPoint?.name || "End"}.`,
+                notificationType: "Route",
+                tone:             "primary",
+                isRead:           true,
+                createdAt:        route.updatedAt || route.createdAt,
+            });
+
+            // Collection status notification
+            if (status === "In_Progress") {
+                routeNotifs.push({
+                    _id:              `route-progress-${route._id}`,
+                    title:            "Collection in progress",
+                    message:          `Waste collection is actively in progress on ${route.routeName}.`,
+                    notificationType: "Route",
+                    tone:             "warning",
+                    isRead:           false,
+                    createdAt:        new Date(),
+                });
+            } else if (status === "Completed") {
+                routeNotifs.push({
+                    _id:              `route-done-${route._id}`,
+                    title:            "Route completed",
+                    message:          `Route "${route.routeName}" has been marked as completed.`,
+                    notificationType: "Route",
+                    tone:             "success",
+                    isRead:           true,
+                    createdAt:        new Date(),
+                });
+            }
+
+            // Schedule reminder
+            if (route.collectionTime) {
+                routeNotifs.push({
+                    _id:              `route-schedule-${route._id}`,
+                    title:            "Collection schedule",
+                    message:          `${route.routeName} scheduled: ${route.collectionTime}. Area: ${route.postalCode || "N/A"}.`,
+                    notificationType: "Route",
+                    tone:             "primary",
+                    isRead:           true,
+                    createdAt:        route.createdAt,
+                });
+            }
+        } else {
+            routeNotifs.push({
+                _id:              `route-none-${driverId}`,
+                title:            "No route assigned",
+                message:          "You have no route assigned yet. Please contact your admin.",
+                notificationType: "Route",
+                tone:             "warning",
+                isRead:           false,
+                createdAt:        new Date(),
+            });
+        }
+
+        // 3. Truck alert
+        if (driver?.vehicleNumber) {
+            const truck = driver.vehicleNumber;
+            truckNotifs.push({
+                _id:              `truck-${truck._id}`,
+                title:            "Truck assigned",
+                message:          `Your assigned truck: ${truck.plateNumber}. Capacity: ${truck.capacity || "N/A"} t. Status: ${truck.status || "Active"}.`,
+                notificationType: "System",
+                tone:             "primary",
+                isRead:           true,
+                createdAt:        truck.updatedAt || truck.createdAt,
+            });
+        }
+
+        // Merge all and sort newest first
+        const all = [
+            ...storedNotifs.map((n) => ({
+                ...n.toObject(),
+                tone: n.notificationType === "Route" ? "warning"
+                    : n.notificationType === "Request" ? "primary"
+                    : "primary",
+            })),
+            ...routeNotifs,
+            ...truckNotifs,
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, notifications: all });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
