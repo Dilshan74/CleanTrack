@@ -1,11 +1,41 @@
 const Route = require("../models/route.js");
-
+const { isValidLocation, getPostalCodeForCity } = require("../utils/locationData");
 
 // Add Route
 
 exports.addRoute = async(req,res)=>{
 try{
-    const { startPoint, endPoint } = req.body;
+    const { startPoint, endPoint, province, district, city } = req.body;
+    
+    if (!province) {
+        return res.status(400).json({ success: false, message: "Province is required." });
+    }
+    if (!district) {
+        return res.status(400).json({ success: false, message: "District is required." });
+    }
+    if (!city) {
+        return res.status(400).json({ success: false, message: "City is required." });
+    }
+    
+    if (!isValidLocation(province, district, city)) {
+        return res.status(400).json({ success: false, message: "Invalid combination of Province, District, and City." });
+    }
+    
+    const resolvedPostalCode = getPostalCodeForCity(province, district, city);
+    if (!resolvedPostalCode) {
+        return res.status(400).json({ success: false, message: "Could not determine postal code for the selected City." });
+    }
+    
+    req.body.postalCode = resolvedPostalCode;
+    req.body.areas = [
+        {
+            province,
+            district,
+            city,
+            areaName: city
+        }
+    ];
+
     if (!startPoint || !startPoint.name || startPoint.latitude === undefined || startPoint.longitude === undefined) {
         return res.status(400).json({ success: false, message: "Start point is required with valid name, latitude and longitude." });
     }
@@ -24,7 +54,7 @@ try{
     // Sync Driver's assignedRoute and vehicleNumber if assigned during creation
     if (req.body.assignedDriver) {
         const Driver = require("../models/driver.js");
-        const updateData = { assignedRoute: route._id };
+        const updateData = { assignedRoute: route._id, status: "Assigned" };
         if (req.body.assignedTruck) {
             updateData.vehicleNumber = req.body.assignedTruck;
             const Truck = require("../models/truck.js");
@@ -96,7 +126,36 @@ message:error.message
 
 exports.updateRoute = async(req,res)=>{
 try{
-    const { startPoint, endPoint } = req.body;
+    const { startPoint, endPoint, province, district, city } = req.body;
+    
+    if (province !== undefined || district !== undefined || city !== undefined) {
+        const currentRoute = await Route.findById(req.params.id);
+        if (!currentRoute) {
+            return res.status(404).json({ success: false, message: "Route not found." });
+        }
+        const finalProvince = province !== undefined ? province : currentRoute.province;
+        const finalDistrict = district !== undefined ? district : currentRoute.district;
+        const finalCity     = city !== undefined ? city : currentRoute.city;
+        
+        if (!isValidLocation(finalProvince, finalDistrict, finalCity)) {
+            return res.status(400).json({ success: false, message: "Invalid combination of Province, District, and City." });
+        }
+        
+        const resolvedPostalCode = getPostalCodeForCity(finalProvince, finalDistrict, finalCity);
+        if (!resolvedPostalCode) {
+            return res.status(400).json({ success: false, message: "Could not determine postal code for the selected City." });
+        }
+        req.body.postalCode = resolvedPostalCode;
+        req.body.areas = [
+            {
+                province: finalProvince,
+                district: finalDistrict,
+                city: finalCity,
+                areaName: finalCity
+            }
+        ];
+    }
+
     if (startPoint !== undefined || endPoint !== undefined) {
         let sp = startPoint;
         let ep = endPoint;
@@ -139,7 +198,7 @@ try{
 
     // 1. Clear old driver's assignments if driver changed
     if (req.body.assignedDriver !== undefined && oldRoute && oldRoute.assignedDriver && oldRoute.assignedDriver.toString() !== req.body.assignedDriver) {
-        await Driver.findByIdAndUpdate(oldRoute.assignedDriver, { assignedRoute: null, vehicleNumber: null });
+        await Driver.findByIdAndUpdate(oldRoute.assignedDriver, { assignedRoute: null, vehicleNumber: null, status: "Available" });
         if (oldRoute.assignedTruck) {
             await Truck.findByIdAndUpdate(oldRoute.assignedTruck, { assignedDriver: null });
         }
@@ -147,7 +206,7 @@ try{
 
     // 2. Set new driver's assignments
     if (driverId) {
-        const updateData = { assignedRoute: route._id };
+        const updateData = { assignedRoute: route._id, status: "Assigned" };
         if (truckId) {
             updateData.vehicleNumber = truckId;
             await Truck.findByIdAndUpdate(truckId, { assignedDriver: driverId });

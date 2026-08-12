@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF } from "@react-google-maps/api";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../../utils/constants";
@@ -79,7 +79,7 @@ export default function LiveTrackingMap({
   const [truckPos,     setTruckPos]     = useState(null);
   const [userPos,      setUserPos]      = useState(null);
   const [trackStatus,  setTrackStatus]  = useState("waiting"); // "waiting"|"tracking"|"completed"
-  const [mapType,      setMapType]      = useState("roadmap");
+  const [mapType]                       = useState("roadmap");
   const [lastUpdated,  setLastUpdated]  = useState(null);
   const [timeAgo,      setTimeAgo]      = useState("Waiting...");
   const [speed,        setSpeed]        = useState(0);

@@ -30,6 +30,21 @@ const userSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
+        province: {
+            type: String,
+            trim: true,
+            default: ""
+        },
+        district: {
+            type: String,
+            trim: true,
+            default: ""
+        },
+        city: {
+            type: String,
+            trim: true,
+            default: ""
+        },
         postalCode: {
             type: String,
             trim: true,

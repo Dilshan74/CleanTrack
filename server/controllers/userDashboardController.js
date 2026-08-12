@@ -12,7 +12,7 @@ exports.getUserDashboard = async (req, res) => {
         const userId = req.user.id;
 
         const [userDoc, upcomingRequests, openComplaints, history, notifications] = await Promise.all([
-            User.findById(userId).select("postalCode"),
+            User.findById(userId).select("postalCode province district city role email"),
             CollectionRequest.find({ user: userId, status: { $in: ["Pending", "Approved"] } }),
             CollectionRequest.countDocuments({ user: userId, status: "Pending" }),
             CollectionHistory.countDocuments({ user: userId }),
@@ -20,20 +20,27 @@ exports.getUserDashboard = async (req, res) => {
         ]);
 
         let userPostalCode = (userDoc?.postalCode || "").trim();
+        let userCity = (userDoc?.city || "").trim();
 
         if (userDoc?.role === "driver" && !userPostalCode) {
             const driverProfile = await Driver.findOne({ email: userDoc.email }).populate("assignedRoute");
             if (driverProfile && driverProfile.assignedRoute) {
                 userPostalCode = driverProfile.assignedRoute.postalCode || "";
+                userCity = driverProfile.assignedRoute.city || "";
             }
         }
 
         let matchedRoutes = [];
-        if (userPostalCode) {
-            matchedRoutes = await Route.find({
-                postalCode: userPostalCode,
+        if (userPostalCode || userCity) {
+            const query = {
                 status: { $in: ["Active", "Inactive", "Completed"] }
-            });
+            };
+            if (userPostalCode) {
+                query.postalCode = userPostalCode;
+            } else {
+                query.city = userCity;
+            }
+            matchedRoutes = await Route.find(query);
         }
 
         let allUpcoming = [];
@@ -132,10 +139,19 @@ exports.getUserProfile = async (req, res) => {
 // 2. Update profile
 exports.updateUserProfile = async (req, res) => {
     try {
-        const { fullName, phone, address, postalCode, nationalId } = req.body;
+        const { fullName, phone, address, province, district, city, postalCode, nationalId } = req.body;
+
+        const { isValidLocation } = require("../utils/locationData");
+        if (province && district && city && !isValidLocation(province, district, city, postalCode)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid combination of Province, District, City, and Postal Code."
+            });
+        }
+
         const user = await User.findByIdAndUpdate(
             req.user.id,
-            { fullName, phone, address, postalCode, nationalId },
+            { fullName, phone, address, province, district, city, postalCode, nationalId },
             { new: true, runValidators: true }
         ).select("-password");
 
@@ -249,29 +265,36 @@ exports.getUserRequests = async (req, res) => {
     }
 };
 
-// 5. View my collection schedule — matched by postal code
+// 5. View my collection schedule — matched by city or postal code
 exports.getUserSchedule = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("postalCode address role email");
+        const user = await User.findById(req.user.id).select("postalCode address role email province district city");
         let userPostalCode = (user?.postalCode || "").trim();
-        console.log("getUserSchedule -> User:", user.email, "Role:", user.role, "PostalCode:", userPostalCode);
+        let userCity = (user?.city || "").trim();
+        console.log("getUserSchedule -> User:", user.email, "Role:", user.role, "PostalCode:", userPostalCode, "City:", userCity);
 
         if (user?.role === "driver" && !userPostalCode) {
             const driverProfile = await Driver.findOne({ email: user.email }).populate("assignedRoute");
             if (driverProfile && driverProfile.assignedRoute) {
                 userPostalCode = driverProfile.assignedRoute.postalCode || "";
-                console.log("getUserSchedule -> Driver profile found. Route PostalCode:", userPostalCode);
+                userCity = driverProfile.assignedRoute.city || "";
+                console.log("getUserSchedule -> Driver profile found. Route PostalCode:", userPostalCode, "City:", userCity);
             } else {
                 console.log("getUserSchedule -> Driver profile or assignedRoute NOT found");
             }
         }
 
         let matchedRoutes = [];
-        if (userPostalCode) {
-            matchedRoutes = await Route.find({
-                postalCode: userPostalCode,
+        if (userPostalCode || userCity) {
+            const query = {
                 status: { $in: ["Active", "Inactive", "Completed"] }
-            })
+            };
+            if (userPostalCode) {
+                query.postalCode = userPostalCode;
+            } else {
+                query.city = userCity;
+            }
+            matchedRoutes = await Route.find(query)
             .populate("assignedDriver", "name phone")
             .populate("assignedTruck", "plateNumber")
             .sort({ createdAt: -1 });
@@ -391,10 +414,11 @@ exports.getUserHistory = async (req, res) => {
 // 8. Get truck/driver live location for the user's assigned route
 exports.getTruckLocation = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("postalCode address");
+        const user = await User.findById(req.user.id).select("postalCode address city");
 
-        // Priority: query param > profile postalCode > extract from address
+        // Priority: query param > profile postalCode > profile city > extract from address
         let userPostalCode = (req.query.postalCode || user?.postalCode || "").trim();
+        let userCity = (user?.city || "").trim();
 
         // Fallback: try to extract a numeric postal code from the address string
         if (!userPostalCode && user?.address) {
@@ -402,20 +426,24 @@ exports.getTruckLocation = async (req, res) => {
             if (match) userPostalCode = match[0];
         }
 
-        if (!userPostalCode) {
+        if (!userPostalCode && !userCity) {
             return res.status(404).json({
                 success: false,
-                message: "No postal code found for your account. Please update your profile with your postal code."
+                message: "No postal code or city found for your account. Please update your profile."
             });
         }
 
-        // Find the route for this postal code with an assigned driver.
-        // NOTE: Do NOT filter by route.status — a "Completed" route still has
-        // a driver assigned and must be queryable for live tracking.
-        const route = await Route.findOne({
-            postalCode:     userPostalCode,
+        // Find the route for this location with an assigned driver.
+        const query = {
             assignedDriver: { $ne: null },
-        })
+        };
+        if (userPostalCode) {
+            query.postalCode = userPostalCode;
+        } else {
+            query.city = userCity;
+        }
+
+        const route = await Route.findOne(query)
         .sort({ updatedAt: -1 })           // prefer most recently updated if multiple
         .populate("assignedDriver", "name location status updatedAt")
         .populate("assignedTruck",  "_id plateNumber");
@@ -437,7 +465,14 @@ exports.getTruckLocation = async (req, res) => {
                 message:  "Collection completed for today",
                 driver: { id: driver._id, name: driver.name },
                 truck:  { id: route.assignedTruck?._id, plateNumber: route.assignedTruck?.plateNumber || "" },
-                route:  { id: route._id, name: route.routeName, postalCode: userPostalCode, collectionStatus: route.collectionStatus },
+                route:  {
+                    id: route._id,
+                    name: route.routeName,
+                    postalCode: userPostalCode,
+                    collectionStatus: route.collectionStatus,
+                    startPoint: route.startPoint,
+                    endPoint: route.endPoint,
+                },
             });
         }
 
@@ -449,7 +484,14 @@ exports.getTruckLocation = async (req, res) => {
                 message:  "Driver has not started tracking yet",
                 driver: { id: driver._id, name: driver.name },
                 truck:  { id: route.assignedTruck?._id, plateNumber: route.assignedTruck?.plateNumber || "" },
-                route:  { id: route._id, name: route.routeName, postalCode: userPostalCode, collectionStatus: route.collectionStatus },
+                route:  {
+                    id: route._id,
+                    name: route.routeName,
+                    postalCode: userPostalCode,
+                    collectionStatus: route.collectionStatus,
+                    startPoint: route.startPoint,
+                    endPoint: route.endPoint,
+                },
             });
         }
 
@@ -459,7 +501,14 @@ exports.getTruckLocation = async (req, res) => {
             tracking: true,
             driver: { id: driver._id, name: driver.name },
             truck:  { id: route.assignedTruck?._id, plateNumber: route.assignedTruck?.plateNumber || "" },
-            route:  { id: route._id, name: route.routeName, postalCode: userPostalCode, collectionStatus: route.collectionStatus },
+            route:  {
+                id: route._id,
+                name: route.routeName,
+                postalCode: userPostalCode,
+                collectionStatus: route.collectionStatus,
+                startPoint: route.startPoint,
+                endPoint: route.endPoint,
+            },
             location: {
                 latitude:  driver.location.lat,
                 longitude: driver.location.lng,

@@ -36,6 +36,7 @@ export default function CollectionSchedule() {
             <table className="w-full text-sm">
               <thead className="bg-muted text-muted-foreground text-left">
                 <tr>
+                  <th className="px-4 py-3 font-medium">Route</th>
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Time</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -45,13 +46,14 @@ export default function CollectionSchedule() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan="5" className="px-4 py-8 text-center text-muted-foreground">
                       No collections scheduled for your area yet.
                     </td>
                   </tr>
                 ) : (
                   rows.map((r, index) => (
                     <tr key={index} className="border-t">
+                      <td className="px-4 py-3 font-medium">{r.routeName || "—"}</td>
                       <td className="px-4 py-3">{r.date}</td>
                       <td className="px-4 py-3">{r.time}</td>
                       <td className="px-4 py-3"><StatusBadge status={r.status} /></td>

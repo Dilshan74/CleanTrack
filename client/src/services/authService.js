@@ -47,7 +47,15 @@ export async function register({ name, email, password, phone, address, postalCo
   return { ...data, user };
 }
 
-export function logout() {
+export async function logout() {
+  try {
+    const user = getStoredUser();
+    if (user && user.role === "driver") {
+      await api.post("/auth/logout");
+    }
+  } catch (err) {
+    console.warn("Logout request failed:", err);
+  }
   localStorage.removeItem(STORAGE_KEYS.token);
   localStorage.removeItem(STORAGE_KEYS.user);
 }

@@ -3,15 +3,19 @@ const mongoose = require("mongoose");
 const areaSchema = new mongoose.Schema({
     province: {
         type: String,
-        required: true
+        required: false
     },
     district: {
         type: String,
-        required: true
+        required: false
     },
     municipalCouncil: {
         type: String,
-        required: true
+        required: false
+    },
+    city: {
+        type: String,
+        required: false
     },
     areaName: {
         type: String,
@@ -45,6 +49,26 @@ const routeSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    province: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    district: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    city: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    postalCode: {
+        type: String,
+        trim: true,
+        default: ""
+    },
     startPoint: {
         name: { type: String },
         latitude: { type: Number },
@@ -59,11 +83,6 @@ const routeSchema = new mongoose.Schema({
     collectionTime: {
         type: String,
         required: true
-    },
-    postalCode: {
-        type: String,
-        trim: true,
-        default: ""
     },
     assignedDriver: {
         type: mongoose.Schema.Types.ObjectId,

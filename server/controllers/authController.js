@@ -6,7 +6,7 @@ const Notification = require("../models/notification");
 // Register User
 exports.registerUser = async (req, res) => {
     try {
-        const { fullName, email, password, phone, address, postalCode } = req.body;
+        const { fullName, email, password, phone, address, province, district, city, postalCode } = req.body;
 
         const existingUser = await User.findOne({ email });
 
@@ -14,6 +14,14 @@ exports.registerUser = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Email already registered"
+            });
+        }
+
+        const { isValidLocation } = require("../utils/locationData");
+        if (province && district && city && !isValidLocation(province, district, city, postalCode)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid combination of Province, District, City, and Postal Code."
             });
         }
 
@@ -25,6 +33,9 @@ exports.registerUser = async (req, res) => {
             password: hashedPassword,
             phone,
             address,
+            province: province || "",
+            district: district || "",
+            city: city || "",
             postalCode: postalCode || ""
         });
 
@@ -90,6 +101,11 @@ exports.loginUser = async (req, res) => {
             })();
         }
 
+        if (user.role === "driver") {
+            const Driver = require("../models/driver");
+            await Driver.findOneAndUpdate({ email: user.email }, { status: "On Route" });
+        }
+
         res.json({
             success: true,
             message: "Login successful",
@@ -113,6 +129,20 @@ exports.getMe = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("-password");
         res.status(200).json({ success: true, user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Logout User
+exports.logoutUser = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (user && user.role === "driver") {
+            const Driver = require("../models/driver");
+            await Driver.findOneAndUpdate({ email: user.email }, { status: "Off duty" });
+        }
+        res.status(200).json({ success: true, message: "Logged out successfully" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

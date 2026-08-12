@@ -1,16 +1,9 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import userService from "../../services/userService";
 import { initials } from "../../utils/helpers";
-
-const fields = [
-  ["name", "Full name"],
-  ["email", "Email"],
-  ["phone", "Phone"],
-  ["nationalId", "National ID"],
-  ["postalCode", "Postal Code"],
-];
+import { LOCATION_DATA } from "../../utils/locationData";
 
 export default function Profile() {
   const [form, setForm] = useState(null);
@@ -20,13 +13,50 @@ export default function Profile() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    userService.getProfile().then(setForm);
+    userService.getProfile().then((data) => {
+      // Ensure defaults for location selections
+      setForm({
+        ...data,
+        province: data.province || "Western Province",
+        district: data.district || "Colombo",
+        city: data.city || "Colombo 01 (Fort)",
+        postalCode: data.postalCode || "00100",
+      });
+    });
   }, []);
 
   if (!form) return <Loader label="Loading profile..." />;
 
   function update(key, value) {
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+
+      if (key === "province") {
+        const nextDistricts = Object.keys(LOCATION_DATA[value] || {});
+        const nextDistrict = nextDistricts[0] || "";
+        next.district = nextDistrict;
+        
+        const nextCities = LOCATION_DATA[value]?.[nextDistrict] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
+      }
+
+      if (key === "district") {
+        const nextCities = LOCATION_DATA[next.province]?.[value] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
+      }
+
+      if (key === "city") {
+        const cityList = LOCATION_DATA[next.province]?.[next.district] || [];
+        const matched = cityList.find(c => c.city === value);
+        next.postalCode = matched ? matched.postalCode : "";
+      }
+
+      return next;
+    });
     setSaved(false);
   }
 
@@ -66,6 +96,10 @@ export default function Profile() {
     }
   }
 
+  const provinceOptions = Object.keys(LOCATION_DATA);
+  const districtOptions = LOCATION_DATA[form.province] ? Object.keys(LOCATION_DATA[form.province]) : [];
+  const cityOptions = LOCATION_DATA[form.province]?.[form.district] || [];
+
   return (
     <div>
       <div className="mb-6">
@@ -85,7 +119,7 @@ export default function Profile() {
               />
             ) : (
               <div className="h-24 w-24 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-3xl font-bold ring-4 ring-primary/20">
-                {initials(form.name)}
+                {initials(form.fullName || form.name)}
               </div>
             )}
 
@@ -107,7 +141,7 @@ export default function Profile() {
           />
 
           <div>
-            <div className="font-semibold">{form.name}</div>
+            <div className="font-semibold">{form.fullName || form.name}</div>
             <div className="text-sm text-muted-foreground">Resident - {form.postalCode || "No postal code"}</div>
           </div>
 
@@ -129,19 +163,66 @@ export default function Profile() {
         </div>
 
         <form onSubmit={handleSubmit} className="lg:col-span-2 rounded-xl border bg-card p-6 grid gap-4 sm:grid-cols-2">
-          {fields.map(([key, label]) => (
-            <label key={key} className="text-sm">
-              <span className="text-muted-foreground">{label}</span>
-              <input
-                value={form[key] ?? ""}
-                onChange={(e) => update(key, e.target.value)}
-                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-              />
-            </label>
-          ))}
+          <label className="text-sm">
+            <span className="text-muted-foreground">Full name</span>
+            <input required value={form.fullName || form.name || ""} onChange={(e) => update("fullName", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">Email</span>
+            <input required type="email" disabled value={form.email || ""} className="mt-1 w-full rounded-lg border bg-muted px-3 py-2 outline-none cursor-not-allowed" />
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">Phone</span>
+            <input required value={form.phone || ""} onChange={(e) => update("phone", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">National ID</span>
+            <input value={form.nationalId || ""} onChange={(e) => update("nationalId", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">Province</span>
+            <select value={form.province} onChange={(e) => update("province", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+              {provinceOptions.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">District</span>
+            <select value={form.district} onChange={(e) => update("district", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+              {districtOptions.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">City</span>
+            <select value={form.city} onChange={(e) => update("city", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+              {cityOptions.map(c => (
+                <option key={c.city} value={c.city}>{c.city}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <span className="text-muted-foreground">Postal Code (Auto-populated)</span>
+            <input readOnly value={form.postalCode || ""} className="mt-1 w-full rounded-lg border bg-muted px-3 py-2 outline-none cursor-not-allowed" />
+          </label>
+
+          <label className="text-sm sm:col-span-2">
+            <span className="text-muted-foreground">Street Address / House No.</span>
+            <input required value={form.address || ""} onChange={(e) => update("address", e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </label>
+
           <div className="sm:col-span-2 flex items-center justify-end gap-2">
             {saved && <span className="text-sm text-success mr-auto">Saved!</span>}
-            <button type="button" className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancel</button>
+            <button type="button" onClick={() => userService.getProfile().then(setForm)} className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Cancel</button>
             <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Save changes</button>
           </div>
         </form>

@@ -4,43 +4,7 @@ import Loader from "../../components/common/Loader";
 import adminService from "../../services/adminService";
 import Modal from "../../components/common/Modal";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF } from "@react-google-maps/api";
-
-const LOCATION_DATA = {
-  Western: {
-    Colombo: ["Colombo", "Dehiwala-Mount Lavinia", "Sri Jayawardenepura Kotte", "Kaduwela", "Moratuwa"],
-    Gampaha: ["Negombo", "Gampaha"],
-  },
-  "North Western": {
-    Kurunegala: ["Kurunegala"],
-  },
-  Central: {
-    Kandy: ["Kandy"],
-    Matale: ["Matale", "Dambulla"],
-    "Nuwara Eliya": ["Nuwara Eliya"],
-  },
-  Uva: {
-    Badulla: ["Badulla", "Bandarawela"],
-  },
-  Southern: {
-    Galle: ["Galle"],
-    Matara: ["Matara"],
-    Hambantota: ["Hambantota"],
-  },
-  Sabaragamuwa: {
-    Ratnapura: ["Ratnapura"],
-  },
-  "North Central": {
-    Anuradhapura: ["Anuradhapura"],
-    Polonnaruwa: ["Polonnaruwa"],
-  },
-  Northern: {
-    Jaffna: ["Jaffna"],
-  },
-  Eastern: {
-    Batticaloa: ["Batticaloa"],
-    Ampara: ["Kalmunai", "Akkaraipattu"],
-  },
-};
+import { LOCATION_DATA } from "../../utils/locationData";
 
 const DEFAULT_CENTER = { lat: 6.9271, lng: 79.8612 };
 const MAP_CONTAINER_STYLE = { width: "100%", height: "250px" };
@@ -62,10 +26,10 @@ export default function ManageRoutes() {
     routeDescription: "",
     collectionDate: "",
     collectionTimeOfDay: "",
-    postalCode: "",
-    province: "Western",
+    postalCode: "00100",
+    province: "Western Province",
     district: "Colombo",
-    municipalCouncil: "Colombo",
+    city: "Colombo 01 (Fort)",
     assignedDriver: "",
     assignedTruck: "",
     startPoint: { name: "", latitude: 6.9271, longitude: 79.8612 },
@@ -89,7 +53,7 @@ export default function ManageRoutes() {
 
   const provinceOptions = Object.keys(LOCATION_DATA);
   const districtOptions = LOCATION_DATA[form.province] ? Object.keys(LOCATION_DATA[form.province]) : [];
-  const municipalOptions = LOCATION_DATA[form.province]?.[form.district] || [];
+  const cityOptions = LOCATION_DATA[form.province]?.[form.district] || [];
 
   function updateForm(key, value) {
     setForm((f) => {
@@ -99,11 +63,24 @@ export default function ManageRoutes() {
         const nextDistricts = Object.keys(LOCATION_DATA[value] || {});
         const nextDistrict = nextDistricts[0] || "";
         next.district = nextDistrict;
-        next.municipalCouncil = LOCATION_DATA[value]?.[nextDistrict]?.[0] || "";
+        
+        const nextCities = LOCATION_DATA[value]?.[nextDistrict] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
       }
 
       if (key === "district") {
-        next.municipalCouncil = LOCATION_DATA[next.province]?.[value]?.[0] || "";
+        const nextCities = LOCATION_DATA[next.province]?.[value] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
+      }
+
+      if (key === "city") {
+        const cityList = LOCATION_DATA[next.province]?.[next.district] || [];
+        const matched = cityList.find(c => c.city === value);
+        next.postalCode = matched ? matched.postalCode : "";
       }
 
       return next;
@@ -158,6 +135,9 @@ export default function ManageRoutes() {
         routeName: form.routeName,
         routeDescription: form.routeDescription,
         collectionTime: `${form.collectionDate} ${form.collectionTimeOfDay}`.trim(),
+        province: form.province,
+        district: form.district,
+        city: form.city,
         postalCode: form.postalCode,
         assignedDriver: form.assignedDriver || null,
         assignedTruck: form.assignedTruck || null,
@@ -175,8 +155,8 @@ export default function ManageRoutes() {
           {
             province: form.province,
             district: form.district,
-            municipalCouncil: form.municipalCouncil,
-            areaName: form.municipalCouncil,
+            city: form.city,
+            areaName: form.city,
           },
         ],
       };
@@ -195,10 +175,10 @@ export default function ManageRoutes() {
         routeDescription: "",
         collectionDate: "",
         collectionTimeOfDay: "",
-        postalCode: "",
-        province: "Western",
+        postalCode: "00100",
+        province: "Western Province",
         district: "Colombo",
-        municipalCouncil: "Colombo",
+        city: "Colombo 01 (Fort)",
         assignedDriver: "",
         assignedTruck: "",
         startPoint: { name: "", latitude: 6.9271, longitude: 79.8612 },
@@ -270,7 +250,7 @@ export default function ManageRoutes() {
                     </div>
                     <div>
                       <div className="font-semibold">{r.routeName || r.id}</div>
-                      <div className="text-xs text-muted-foreground">{r.areas?.[0]?.municipalCouncil || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.city || r.areas?.[0]?.city || r.areas?.[0]?.municipalCouncil || "—"}</div>
                     </div>
                   </div>
                   <div className="flex gap-3">
@@ -287,9 +267,9 @@ export default function ManageRoutes() {
                           collectionDate: cDate,
                           collectionTimeOfDay: cTime,
                           postalCode: r.postalCode || "",
-                          province: area.province || "Western",
-                          district: area.district || "Colombo",
-                          municipalCouncil: area.municipalCouncil || area.areaName || "Colombo",
+                          province: r.province || area.province || "Western Province",
+                          district: r.district || area.district || "Colombo",
+                          city: r.city || area.city || area.municipalCouncil || area.areaName || "Colombo 01 (Fort)",
                           assignedDriver: r.assignedDriver?._id || r.assignedDriver || "",
                           assignedTruck: r.assignedTruck?._id || r.assignedTruck || "",
                           startPoint: r.startPoint || { name: "", latitude: 6.9271, longitude: 79.8612 },
@@ -357,10 +337,10 @@ export default function ManageRoutes() {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">Municipal Council</label>
-              <select required value={form.municipalCouncil} onChange={(e) => updateForm("municipalCouncil", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
-                {municipalOptions.map((council) => (
-                  <option key={council} value={council}>{council}</option>
+              <label className="text-sm font-medium">City</label>
+              <select required value={form.city} onChange={(e) => updateForm("city", e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring">
+                {cityOptions.map((c) => (
+                  <option key={c.city} value={c.city}>{c.city}</option>
                 ))}
               </select>
             </div>
@@ -399,8 +379,8 @@ export default function ManageRoutes() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Postal Code</label>
-            <input required value={form.postalCode} onChange={(e) => updateForm("postalCode", e.target.value)} placeholder="e.g. 80000" className="w-full rounded-lg border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+            <label className="text-sm font-medium">Postal Code (Auto-populated)</label>
+            <input required readOnly value={form.postalCode} className="w-full rounded-lg border bg-muted px-3 py-2 outline-none cursor-not-allowed" />
           </div>
 
           {/* Start Point Form */}

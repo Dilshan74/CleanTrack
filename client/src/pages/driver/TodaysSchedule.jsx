@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Play, Map, MapPin, Truck, Calendar, Clock, Navigation } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import driverService from "../../services/driverService";
@@ -131,6 +131,29 @@ export default function TodaysSchedule() {
               <div>
                 <div className="text-xs text-muted-foreground font-semibold">Collection Date / Time</div>
                 <div className="font-medium text-foreground">{collectionDate} @ {collectionTime}</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl">🗺️</span>
+              <div>
+                <div className="text-xs text-muted-foreground font-semibold">Location Area</div>
+                <div className="font-medium text-foreground">
+                  {routeInfo.city || routeInfo.areas?.[0]?.city || routeInfo.areas?.[0]?.municipalCouncil || "—"}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl">📮</span>
+              <div>
+                <div className="text-xs text-muted-foreground font-semibold">Postal Code</div>
+                <div className="font-medium text-foreground">{routeInfo.postalCode || "—"}</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <span className="text-xl">🏢</span>
+              <div>
+                <div className="text-xs text-muted-foreground font-semibold">Province / District</div>
+                <div className="font-medium text-foreground">{routeInfo.province || routeInfo.areas?.[0]?.province || "—"} / {routeInfo.district || routeInfo.areas?.[0]?.district || "—"}</div>
               </div>
             </div>
           </div>

@@ -4,7 +4,7 @@ import { Leaf, User, Mail, Lock, Phone, MapPin, Hash, AlertCircle } from "lucide
 import { useAuth } from "../../hooks/useAuth";
 import { APP_NAME, ROLES, ROLE_HOME } from "../../utils/constants";
 import { validateRegister, hasErrors } from "../../utils/helpers";
-import { useJsApiLoader } from "@react-google-maps/api";
+import { LOCATION_DATA } from "../../utils/locationData";
 
 export default function Register() {
   const { register, loading } = useAuth();
@@ -15,49 +15,47 @@ export default function Register() {
     password: "",
     phone: "",
     address: "",
-    postalCode: "",
+    province: "Western Province",
+    district: "Colombo",
+    city: "Colombo 01 (Fort)",
+    postalCode: "00100",
     role: ROLES.USER,
   });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState("");
-  const [geocodeTimeout, setGeocodeTimeout] = useState(null);
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
-  });
 
   function update(key, value) {
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+
+      if (key === "province") {
+        const nextDistricts = Object.keys(LOCATION_DATA[value] || {});
+        const nextDistrict = nextDistricts[0] || "";
+        next.district = nextDistrict;
+        
+        const nextCities = LOCATION_DATA[value]?.[nextDistrict] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
+      }
+
+      if (key === "district") {
+        const nextCities = LOCATION_DATA[next.province]?.[value] || [];
+        const nextCity = nextCities[0]?.city || "";
+        next.city = nextCity;
+        next.postalCode = nextCities[0]?.postalCode || "";
+      }
+
+      if (key === "city") {
+        const cityList = LOCATION_DATA[next.province]?.[next.district] || [];
+        const matched = cityList.find(c => c.city === value);
+        next.postalCode = matched ? matched.postalCode : "";
+      }
+
+      return next;
+    });
     setServerError("");
     setErrors((e) => ({ ...e, [key]: undefined }));
-  }
-
-  function handleAddressChange(val) {
-    update("address", val);
-    
-    if (geocodeTimeout) clearTimeout(geocodeTimeout);
-    
-    const timeout = setTimeout(() => {
-      if (!val || val.length < 5) return;
-      if (window.google && window.google.maps) {
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: val }, (results, status) => {
-          if (status === "OK" && results[0]) {
-            let pCode = "";
-            for (const component of results[0].address_components) {
-              if (component.types.includes("postal_code")) {
-                pCode = component.long_name;
-                break;
-              }
-            }
-            if (pCode) {
-              setForm((f) => ({ ...f, postalCode: pCode }));
-            }
-          }
-        });
-      }
-    }, 800);
-    setGeocodeTimeout(timeout);
   }
 
   async function handleSubmit(e) {
@@ -75,6 +73,10 @@ export default function Register() {
       );
     }
   }
+
+  const provinceOptions = Object.keys(LOCATION_DATA);
+  const districtOptions = LOCATION_DATA[form.province] ? Object.keys(LOCATION_DATA[form.province]) : [];
+  const cityOptions = LOCATION_DATA[form.province]?.[form.district] || [];
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-secondary to-background p-4">
@@ -147,34 +149,81 @@ export default function Register() {
               {errors.phone && <span className="mt-1 block text-xs text-destructive">{errors.phone}</span>}
             </label>
 
-            {/* Address */}
+            {/* Province */}
             <label className="block text-sm">
-              <span className="text-muted-foreground">Address</span>
+              <span className="text-muted-foreground">Province</span>
               <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
-                <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                <input
-                  value={form.address}
-                  onChange={(e) => handleAddressChange(e.target.value)}
-                  placeholder="142 Galle Road, Colombo 03"
+                <select
+                  value={form.province}
+                  onChange={(e) => update("province", e.target.value)}
                   className="w-full bg-transparent py-2 outline-none"
-                />
+                >
+                  {provinceOptions.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
-              {errors.address && <span className="mt-1 block text-xs text-destructive">{errors.address}</span>}
+            </label>
+
+            {/* District */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">District</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <select
+                  value={form.district}
+                  onChange={(e) => update("district", e.target.value)}
+                  className="w-full bg-transparent py-2 outline-none"
+                >
+                  {districtOptions.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            </label>
+
+            {/* City */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">City</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <select
+                  value={form.city}
+                  onChange={(e) => update("city", e.target.value)}
+                  className="w-full bg-transparent py-2 outline-none"
+                >
+                  {cityOptions.map(c => (
+                    <option key={c.city} value={c.city}>{c.city}</option>
+                  ))}
+                </select>
+              </div>
             </label>
 
             {/* Postal Code */}
             <label className="block text-sm">
               <span className="text-muted-foreground">Postal Code</span>
-              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-muted px-3">
                 <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
                 <input
+                  readOnly
                   value={form.postalCode}
-                  onChange={(e) => update("postalCode", e.target.value)}
-                  placeholder="e.g. 80000"
+                  className="w-full bg-transparent py-2 outline-none cursor-not-allowed"
+                />
+              </div>
+            </label>
+
+            {/* Address */}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">Street Address / House No.</span>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border bg-background px-3 focus-within:ring-2 focus-within:ring-ring">
+                <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  required
+                  value={form.address}
+                  onChange={(e) => update("address", e.target.value)}
+                  placeholder="e.g. 142 Galle Road"
                   className="w-full bg-transparent py-2 outline-none"
                 />
               </div>
-              <span className="mt-1 block text-xs text-muted-foreground">Used to match your area's collection schedule.</span>
+              {errors.address && <span className="mt-1 block text-xs text-destructive">{errors.address}</span>}
             </label>
 
             {/* Password */}

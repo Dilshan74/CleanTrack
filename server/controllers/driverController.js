@@ -98,17 +98,7 @@ exports.getDrivers = async (req, res) => {
         // on the stored status field (which is always "Available").
         const driversWithStatus = drivers.map((d) => {
             const obj = d.toObject();
-            const cs = d.assignedRoute?.collectionStatus;
-            if (!d.assignedRoute) {
-                obj.status = "Available";
-            } else if (cs === "In_Progress" || cs === "Started") {
-                obj.status = "On Route";
-            } else if (cs === "Completed") {
-                obj.status = "Completed";
-            } else {
-                // Pending / Assigned — driver has a route but hasn't started yet
-                obj.status = "Assigned";
-            }
+            obj.status = d.status || "Available";
             return obj;
         });
 
