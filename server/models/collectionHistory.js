@@ -5,17 +5,14 @@ const collectionHistorySchema = new mongoose.Schema(
         request: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CollectionRequest",
-            required: true,
         },
         user: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: true,
         },
         driver: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Driver",
-            required: true,
         },
         route: {
             type: mongoose.Schema.Types.ObjectId,

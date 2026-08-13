@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Leaf,
@@ -11,6 +11,8 @@ import {
   Users,
 } from "lucide-react";
 import { APP_NAME } from "../utils/constants";
+
+
 import adminService from "../services/adminService";
 
 const features = [
@@ -87,14 +89,14 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-10 items-center">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-accent/40 text-accent-foreground px-3 py-1 text-xs font-medium mb-4">
-            <Recycle className="h-3.5 w-3.5" /> Cleaner cities, smarter routes
+            <Leaf className="h-3.5 w-3.5" /> Cleaner cities, smarter routes
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
             Smart waste collection for modern communities.
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            One platform to plan pickups, track trucks live, resolve complaints,
-            and give residents visibility into their collection schedule.
+             One platform to plan pickups, track trucks live, resolve complaints,
+             and give residents visibility into their collection schedule.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/login" state={{ portal: "user" }} className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-3 font-medium hover:opacity-90">

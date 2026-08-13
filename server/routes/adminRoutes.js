@@ -25,8 +25,7 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 
 // Dashboard
 
-// New overview endpoint (used by AdminDashboard.jsx via adminService.getOverview())
-router.get("/overview", protect, authorize("admin"), getOverview);
+router.get("/overview", getOverview);
 // Legacy dashboard endpoint
 router.get("/dashboard", protect, authorize("admin"), adminDashboard);
 
