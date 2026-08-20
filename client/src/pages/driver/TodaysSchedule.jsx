@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from "react";
-import { Play, Map, MapPin, Truck, Calendar, Clock, Navigation } from "lucide-react";
+import { Play, Map, MapPin, Truck, Calendar, Clock, Navigation, CheckCircle } from "lucide-react";
 import Loader from "../../components/common/Loader";
 import driverService from "../../services/driverService";
 import Modal from "../../components/common/Modal";
 import { GoogleMap, useJsApiLoader, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 
 const tone = {
   Done: "bg-success/15 text-success",
@@ -22,6 +23,7 @@ export default function TodaysSchedule() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [driverPos, setDriverPos] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [ending, setEnding] = useState(false);
   
   const navigate = useNavigate();
 
@@ -29,10 +31,14 @@ export default function TodaysSchedule() {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
   });
 
+  const fetchSchedule = () => {
+    driverService.getTodaysSchedule().then(setStops).catch(console.error);
+    driverService.getRoute().then(data => setRouteInfo(data.route)).catch(console.error);
+    driverService.getProfile().then(setProfile).catch(console.error);
+  };
+
   useEffect(() => {
-    driverService.getTodaysSchedule().then(setStops);
-    driverService.getRoute().then(data => setRouteInfo(data.route));
-    driverService.getProfile().then(setProfile);
+    fetchSchedule();
     
     // Get driver's current position for mapping
     if (navigator.geolocation) {
@@ -43,6 +49,14 @@ export default function TodaysSchedule() {
         () => console.warn("Driver geolocation permission denied or unavailable.")
       );
     }
+
+    // Real-time socket
+    const socket = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000');
+    socket.on("assignment_updated", fetchSchedule);
+    socket.on("route_started", fetchSchedule);
+    socket.on("route_ended", fetchSchedule);
+
+    return () => socket.disconnect();
   }, []);
 
   async function handleStartCollection() {
@@ -50,7 +64,6 @@ export default function TodaysSchedule() {
     setStarting(true);
     try {
       await driverService.startCollection(routeInfo._id);
-      // Navigate to driver location tracking page to start transmitting live coordinates
       navigate("/driver/location");
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to start collection.");
@@ -59,7 +72,38 @@ export default function TodaysSchedule() {
     }
   }
 
+  async function handleEndCollection() {
+    if (!routeInfo) return;
+    setEnding(true);
+    try {
+      await driverService.endCollection(routeInfo._id);
+    } catch (err) {
+      alert(err?.response?.data?.message || "Failed to end collection.");
+    } finally {
+      setEnding(false);
+    }
+  }
+
   if (!stops || !profile) return <Loader label="Loading schedule…" />;
+
+  const isCompleted = routeInfo?.collectionStatus === "Completed";
+  const isInProgress = routeInfo?.collectionStatus === "In_Progress";
+
+  if (!routeInfo || isCompleted) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Today&apos;s Schedule</h1>
+          <p className="text-muted-foreground">Ordered by stop sequence.</p>
+        </div>
+        <div className="rounded-xl border bg-card p-10 flex flex-col items-center justify-center text-center">
+          <CheckCircle className="h-12 w-12 text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold mb-2">No Upcoming Schedules</h2>
+          <p className="text-muted-foreground">You have no active or upcoming collections assigned for today.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Format collection details
   const timeParts = (routeInfo?.collectionTime || "").split(" ");
@@ -82,13 +126,22 @@ export default function TodaysSchedule() {
               <Map className="h-4 w-4 text-primary" /> View Route
             </button>
           )}
-          {routeInfo && routeInfo.collectionStatus !== "Completed" && (
+          {routeInfo && !isCompleted && !isInProgress && (
             <button
               onClick={handleStartCollection}
               disabled={starting}
               className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
             >
               <Play className="h-4 w-4" /> {starting ? "Starting..." : "Start Collection"}
+            </button>
+          )}
+          {routeInfo && isInProgress && (
+            <button
+              onClick={handleEndCollection}
+              disabled={ending}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4" /> {ending ? "Ending..." : "End Collection"}
             </button>
           )}
         </div>

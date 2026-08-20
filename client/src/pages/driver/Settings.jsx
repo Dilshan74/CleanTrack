@@ -85,10 +85,9 @@ export default function Settings() {
               <div className="font-medium">{user?.name} · {profile.license}</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><div className="text-muted-foreground text-xs">Truck</div><div className="font-medium">{profile.truck}</div></div>
-              <div><div className="text-muted-foreground text-xs">Route</div><div className="font-medium">{profile.route}</div></div>
-              <div><div className="text-muted-foreground text-xs">Shift</div><div className="font-medium">{profile.shift}</div></div>
+              <div><div className="text-muted-foreground text-xs">Email</div><div className="font-medium">{profile.email}</div></div>
               <div><div className="text-muted-foreground text-xs">Phone</div><div className="font-medium">{profile.phone}</div></div>
+              <div><div className="text-muted-foreground text-xs">Shift</div><div className="font-medium">{profile.shift}</div></div>
             </div>
             <div className="pt-2">
               <button onClick={handleLogout} className="rounded-lg border px-4 py-2 text-sm text-destructive hover:bg-destructive/10">Log out</button>

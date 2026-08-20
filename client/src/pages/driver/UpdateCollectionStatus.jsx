@@ -28,7 +28,8 @@ export default function UpdateCollectionStatus() {
 
   if (!stopsData) return <Loader label="Loading stops…" />;
 
-  const { routeName, days, stops } = stopsData;
+  const { routeName, days, stops, collectionStatus } = stopsData;
+  const isCompleted = collectionStatus === "Completed";
   const done = stops.filter((s) => s.status !== "Pending").length;
 
   const today = new Date();
@@ -45,6 +46,21 @@ export default function UpdateCollectionStatus() {
     days.includes(isoDate) || 
     days.includes(gbDate)
   ) : true;
+
+  if (isCompleted || routeName === "No route assigned") {
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Update Collection Status</h1>
+        </div>
+        <div className="rounded-xl border bg-card p-10 flex flex-col items-center justify-center text-center">
+          <CheckCircle2 className="h-12 w-12 text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold mb-2">No Active Route</h2>
+          <p className="text-muted-foreground">You have no active collections to update today.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

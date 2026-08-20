@@ -103,6 +103,14 @@ const routeSchema = new mongoose.Schema({
         type: String,
         enum: ["Pending", "Assigned", "Started", "In_Progress", "Completed"],
         default: "Pending"
+    },
+    startedAt: {
+        type: Date,
+        default: null
+    },
+    endedAt: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true

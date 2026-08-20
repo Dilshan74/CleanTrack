@@ -12,30 +12,24 @@ async function tryLive(request, fallback) {
   }
 }
 
-export function getDashboard() {
-  return tryLive(
-    async () => {
-      const { data } = await api.get("/user/dashboard");
-      // Server returns { success, data: { nextPickup, monthlyPickups, ... } }
-      return data.data || data;
-    },
-    () => ({
-      nextPickup: { when: "Tomorrow", time: "7:30 AM", type: "Recyclables" },
-      monthlyPickups: 8,
-      recycledKg: 42,
-      openComplaints: 1,
-      upcoming: [
-        { id: 1, type: "Recyclables", date: "Wed, Jul 15", time: "7:30 AM", status: "Scheduled" },
-        { id: 2, type: "Organic waste", date: "Fri, Jul 17", time: "8:00 AM", status: "Scheduled" },
-        { id: 3, type: "General waste", date: "Mon, Jul 20", time: "7:30 AM", status: "Scheduled" },
-      ],
-      alerts: [
-        "Route B truck delayed by 15 min.",
-        "Bulk pickup available next Sat.",
-        "Your complaint #C-204 is being reviewed.",
-      ],
-    }),
-  );
+export async function getDashboard() {
+  try {
+    const { data } = await api.get("/user/dashboard");
+    const d = data.data || data;
+    return {
+      collectionArea:       d.collectionArea   ?? null,
+      monthlyPickups:       d.monthlyPickups   ?? 0,
+      recycledKg:           d.recycledKg       ?? 0,
+      recycledKgLastMonth:  d.recycledKgLastMonth ?? null,
+      weightDataAvailable:  d.weightDataAvailable ?? false,
+      openComplaints:       d.openComplaints   ?? 0,
+      upcomingPickups:      Array.isArray(d.upcomingPickups) ? d.upcomingPickups : [],
+      recentAlerts:         Array.isArray(d.recentAlerts)    ? d.recentAlerts    : [],
+    };
+  } catch (err) {
+    console.warn("[userService] getDashboard failed:", err?.response?.status, err?.response?.data?.message || err?.message);
+    return null; // null signals the dashboard to show an error state
+  }
 }
 
 export function getSchedule() {

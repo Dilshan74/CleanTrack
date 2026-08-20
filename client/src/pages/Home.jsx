@@ -49,14 +49,10 @@ export default function Home() {
           trucksOnRoute: res.trucksOnRoute || 0,
           pickupsToday: res.pickupsToday || 0,
           openComplaints: res.openComplaints || 0,
-          routeHealth: res.routeHealth && res.routeHealth.length > 0 ? res.routeHealth.map(rh => ({
+          routeHealth: res.routeHealth ? res.routeHealth.map(rh => ({
             r: rh.r || "Route",
             p: rh.p || 0
-          })) : [
-            { r: "Route A · Galle Road", p: 92 },
-            { r: "Route B · Kandy Central", p: 68 },
-            { r: "Route C · Negombo Town", p: 41 },
-          ],
+          })) : [],
         });
       }
     }).catch(() => {});
@@ -117,17 +113,21 @@ export default function Home() {
               <span className="text-xs rounded-full bg-success/15 text-success px-2 py-0.5">On schedule</span>
             </div>
             <div className="space-y-3">
-              {stats.routeHealth.slice(0, 3).map((x) => (
-                <div key={x.r}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>{x.r}</span>
-                    <span className="text-muted-foreground">{x.p}%</span>
+              {stats.routeHealth.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-4">No routes scheduled for today.</div>
+              ) : (
+                stats.routeHealth.slice(0, 3).map((x) => (
+                  <div key={x.r}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span>{x.r}</span>
+                      <span className="text-muted-foreground">{x.p}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-primary" style={{ width: `${x.p}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: `${x.p}%` }} />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="grid grid-cols-3 gap-3 mt-6 text-center">
               <div className="rounded-lg bg-muted p-3">

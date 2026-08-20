@@ -51,6 +51,21 @@ try{
 
     const route = await Route.create(req.body);
 
+    try {
+        const CollectionRoute = require("../models/collectionRoute.js");
+        await CollectionRoute.create({
+            routeName: route.routeName,
+            area: city,
+            postalCode: resolvedPostalCode,
+            collectionDay: "Scheduled",
+            collectionTime: route.collectionTime,
+            driver: route.assignedDriver || null,
+            status: "Active"
+        });
+    } catch (err) {
+        console.error("Failed to create CollectionRoute:", err.message);
+    }
+
     // Sync Driver's assignedRoute and vehicleNumber if assigned during creation
     if (req.body.assignedDriver) {
         const Driver = require("../models/driver.js");

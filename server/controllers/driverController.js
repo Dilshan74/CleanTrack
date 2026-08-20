@@ -336,9 +336,26 @@ exports.startCollection = async (req, res) => {
         const routeId = req.params.id;
         const route = await Route.findByIdAndUpdate(
             routeId, 
-            { collectionStatus: "In_Progress" }, 
+            { collectionStatus: "In_Progress", startedAt: new Date() }, 
             { new: true }
         );
+
+        if (route && route.postalCode) {
+            const users = await User.find({ postalCode: route.postalCode, role: "user" });
+            const notifs = users.map(u => ({
+                receiver: u._id,
+                receiverType: "User",
+                title: "Collection Started",
+                message: "Your waste collection route has started. The collection vehicle is now on the route.",
+                notificationType: "Route"
+            }));
+            if (notifs.length > 0) await Notification.insertMany(notifs);
+        }
+
+        if (req.io) {
+            req.io.emit("route_started", { routeId });
+            req.io.emit("assignment_updated", { routeId });
+        }
 
         res.json({
             success: true,
@@ -350,19 +367,52 @@ exports.startCollection = async (req, res) => {
     }
 };
 
-// Complete Assigned Areas (Entire Route)
-exports.completeCollection = async (req, res) => {
+// End Collection
+exports.endCollection = async (req, res) => {
     try {
         const routeId = req.params.id;
         const route = await Route.findByIdAndUpdate(
             routeId, 
-            { status: "Completed", collectionStatus: "Completed" }, 
+            { status: "Completed", collectionStatus: "Completed", endedAt: new Date() }, 
             { new: true }
         );
 
+        try {
+            if (route) {
+                const CollectionHistory = require("../models/collectionHistory.js");
+                await CollectionHistory.create({
+                    driver: route.assignedDriver,
+                    route: route._id,
+                    postalCode: route.postalCode,
+                    garbageType: "General waste", // Default for route
+                    collectedDate: new Date(),
+                    remarks: "Route completed by driver"
+                });
+            }
+        } catch (err) {
+            console.error("Failed to create CollectionHistory:", err.message);
+        }
+
+        if (route && route.postalCode) {
+            const users = await User.find({ postalCode: route.postalCode, role: "user" });
+            const notifs = users.map(u => ({
+                receiver: u._id,
+                receiverType: "User",
+                title: "Collection Ended",
+                message: "Today's waste collection for your route has been completed.",
+                notificationType: "Route"
+            }));
+            if (notifs.length > 0) await Notification.insertMany(notifs);
+        }
+
+        if (req.io) {
+            req.io.emit("route_ended", { routeId });
+            req.io.emit("assignment_updated", { routeId });
+        }
+
         res.json({
             success: true,
-            message: "Route marked as completed",
+            message: "Collection ended",
             route
         });
     } catch (error) {
@@ -370,12 +420,26 @@ exports.completeCollection = async (req, res) => {
     }
 };
 
+// Complete Assigned Areas (Entire Route)
+exports.completeCollection = exports.endCollection;
+
 // ==========================================
 // Get Driver Dashboard Summary
 // ==========================================
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+    const p = 0.017453292519943295; // Math.PI / 180
+    const c = Math.cos;
+    const a = 0.5 - c((lat2 - lat1) * p) / 2 +
+        c(lat1 * p) * c(lat2 * p) *
+        (1 - c((lon2 - lon1) * p)) / 2;
+    return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+}
+
 exports.getDashboard = async (req, res) => {
     try {
-        const driver = await Driver.findById(req.driverProfile._id)
+        const driverId = req.driverProfile._id;
+        const driver = await Driver.findById(driverId)
             .populate("vehicleNumber")
             .populate("assignedRoute");
 
@@ -384,36 +448,69 @@ exports.getDashboard = async (req, res) => {
         }
 
         const route = driver.assignedRoute;
-        const stopsToday = route ? route.areas.length : 0;
-        const completed = route ? route.areas.filter(a => a.status === "Collected").length : 0;
-        const missed = route ? route.areas.filter(a => a.status === "Missed").length : 0;
-        const progress = stopsToday > 0 ? Math.round((completed / stopsToday) * 100) : 0;
 
-        const truck = driver.vehicleNumber;
-        let nextStopName = "N/A";
-        if (route && route.areas) {
-            const nextStop = route.areas.find(a => a.status === "Pending");
-            if (nextStop) {
-                nextStopName = nextStop.areaName || "Next stop";
-            } else if (stopsToday > 0) {
-                nextStopName = "All completed";
+        // Calculate total and completed trips
+        const allDriverRoutes = await Route.find({ assignedDriver: driverId });
+        const totalTrips = allDriverRoutes.length;
+        const completedTrips = allDriverRoutes.filter(r => r.status === "Completed").length;
+
+        // Calculate progress by mileage
+        let totalMileage = 0;
+        let completedMileage = 0;
+        let progress = 0;
+
+        if (route && route.startPoint && route.endPoint) {
+            let prevPoint = { lat: route.startPoint.latitude, lng: route.startPoint.longitude };
+            
+            // Go through areas (stops)
+            for (let i = 0; i < route.areas.length; i++) {
+                const area = route.areas[i];
+                if (area.lat && area.lng) {
+                    const dist = calculateDistance(prevPoint.lat, prevPoint.lng, area.lat, area.lng);
+                    totalMileage += dist;
+                    if (area.status === "Collected" || area.status === "Missed") {
+                        completedMileage += dist;
+                    }
+                    prevPoint = { lat: area.lat, lng: area.lng };
+                }
+            }
+            // Add distance to end point
+            if (route.endPoint.latitude && route.endPoint.longitude) {
+                const dist = calculateDistance(prevPoint.lat, prevPoint.lng, route.endPoint.latitude, route.endPoint.longitude);
+                totalMileage += dist;
+                // If route is completely done, we can consider the final leg completed.
+                // Assuming it's collected if the last area is collected.
+                if (route.collectionStatus === "Completed") {
+                     completedMileage += dist;
+                } else if (route.areas.length > 0 && route.areas[route.areas.length - 1].status === "Collected") {
+                     completedMileage += dist;
+                }
+            }
+            if (totalMileage > 0) {
+                progress = Math.round((completedMileage / totalMileage) * 100);
             }
         }
+
+        const truck = driver.vehicleNumber;
+        
+        // Fetch Announcements (Global notifications)
+        const announcements = await Notification.find({ receiver: null, notificationType: "System" })
+            .sort({ createdAt: -1 })
+            .limit(3);
+        const formattedAnnouncements = announcements.map(a => ({ id: a._id, title: a.title, message: a.message }));
 
         res.json({
             success: true,
             truck: truck ? truck.plateNumber : "N/A",
             route: route ? route.routeName : "No route assigned",
-            stopsToday,
-            completed,
-            missed,
+            routeId: route ? route._id : null,
+            collectionStatus: route ? route.collectionStatus : null,
+            totalTrips,
+            completedTrips,
             progress,
-            etaNext: "N/A",
-            nextStopName,
-            etaFinish: route ? route.collectionTime : "N/A",
-            fuel: 0,
-            remainingKm: "N/A",
-            announcements: []
+            totalMileage: totalMileage.toFixed(1),
+            completedMileage: completedMileage.toFixed(1),
+            announcements: formattedAnnouncements
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

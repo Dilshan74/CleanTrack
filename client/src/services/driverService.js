@@ -74,6 +74,7 @@ export function getStops() {
       const areas = data.route?.areas || [];
       return {
         routeName: data.route?.routeName || "No route assigned",
+        collectionStatus: data.route?.collectionStatus,
         days: data.route?.collectionTime || "",
         stops: areas.map((a, i) => ({
           id: a._id,
@@ -207,6 +208,16 @@ export async function updatePreferences(preferences) {
   }
 }
 
+export async function startCollection(routeId) {
+  const { data } = await api.put(`/driver/start-collection/${routeId}`);
+  return data;
+}
+
+export async function endCollection(routeId) {
+  const { data } = await api.put(`/driver/complete-area/${routeId}`);
+  return data;
+}
+
 export default {
   getDashboard,
   getTodaysSchedule,
@@ -217,4 +228,6 @@ export default {
   getNotifications,
   getProfile,
   updatePreferences,
+  startCollection,
+  endCollection,
 };

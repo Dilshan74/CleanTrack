@@ -6,116 +6,268 @@ const Notification = require("../models/notification");
 const CollectionHistory = require("../models/collectionHistory");
 const Driver = require("../models/driver");
 
+// ── Helper: 3-tier Route Matching ───────────────────────────────────────────
+// Matches routes based on structured location fields first, then falls back to
+// free-text address keyword matching (which is the most common case for users).
+async function findRoutesForUser(userDoc) {
+    const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    let userPostalCode = (userDoc?.postalCode || "").trim();
+    let userCity       = (userDoc?.city || "").trim();
+    const userAddressRaw = (userDoc?.address || "").trim();
+
+    // Check driver profile if user is a driver without postalCode
+    if (userDoc?.role === "driver" && !userPostalCode) {
+        const Driver = require("../models/driver.js");
+        const driverProfile = await Driver.findOne({ email: userDoc.email }).populate("assignedRoute");
+        if (driverProfile && driverProfile.assignedRoute) {
+            userPostalCode = driverProfile.assignedRoute.postalCode || "";
+            userCity       = driverProfile.assignedRoute.city || "";
+        }
+    }
+
+    let matchedRoutes = [];
+
+    // Tier 1 & 2: structured location fields
+    if (userPostalCode || userCity) {
+        const routeQuery = { status: { $in: ["Active", "Inactive", "Completed"] } };
+        if (userPostalCode && userCity) {
+            routeQuery.postalCode = userPostalCode;
+            routeQuery.city = { $regex: new RegExp(`^${escapeRegex(userCity)}$`, "i") };
+        } else if (userPostalCode) {
+            routeQuery.postalCode = userPostalCode;
+        } else {
+            routeQuery.city = { $regex: new RegExp(`^${escapeRegex(userCity)}$`, "i") };
+        }
+        matchedRoutes = await Route.find(routeQuery).sort({ collectionTime: 1 });
+
+        if (matchedRoutes.length === 0 && userPostalCode && userCity) {
+            matchedRoutes = await Route.find({
+                status: { $in: ["Active", "Inactive", "Completed"] },
+                postalCode: userPostalCode
+            }).sort({ collectionTime: 1 });
+        }
+    }
+
+    // Tier 3: address keyword matching
+    if (userAddressRaw) {
+        const addressWords = userAddressRaw
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
+            .filter(w => w.length >= 4);
+
+        if (addressWords.length > 0 && matchedRoutes.length === 0) {
+            const allRoutes = await Route.find({
+                status: { $in: ["Active", "Inactive", "Completed"] }
+            }).sort({ collectionTime: 1 });
+
+            const scored = allRoutes.map(r => {
+                const routeText = [r.routeName || "", ...(r.areas?.map(a => a.areaName || "") || [])]
+                    .join(" ").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+                const score = addressWords.reduce((acc, word) => acc + (routeText.includes(word) ? 1 : 0), 0);
+                return { route: r, score };
+            });
+
+            const bestScore = Math.max(...scored.map(s => s.score));
+            if (bestScore > 0) {
+                matchedRoutes = scored.filter(s => s.score === bestScore).map(s => s.route);
+            }
+        } else if (addressWords.length > 0 && matchedRoutes.length > 1) {
+            const scored = matchedRoutes.map(r => {
+                const routeText = [r.routeName || "", ...(r.areas?.map(a => a.areaName || "") || [])]
+                    .join(" ").toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+                const score = addressWords.reduce((acc, word) => acc + (routeText.includes(word) ? 1 : 0), 0);
+                return { route: r, score };
+            });
+
+            const bestScore = Math.max(...scored.map(s => s.score));
+            if (bestScore > 0) {
+                matchedRoutes = scored.filter(s => s.score === bestScore).map(s => s.route);
+            }
+        }
+    }
+
+    return { matchedRoutes, userPostalCode, userCity, userAddressRaw };
+}
+
 // 0. User Dashboard summary
 exports.getUserDashboard = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [userDoc, upcomingRequests, openComplaints, history, notifications] = await Promise.all([
-            User.findById(userId).select("postalCode province district city role email"),
-            CollectionRequest.find({ user: userId, status: { $in: ["Pending", "Approved"] } }),
-            CollectionRequest.countDocuments({ user: userId, status: "Pending" }),
-            CollectionHistory.countDocuments({ user: userId }),
-            Notification.find({ receiver: userId }).sort({ createdAt: -1 }).limit(5)
+        const userDoc = await User.findById(userId).select("postalCode province district city address role email");
+        
+        const { matchedRoutes, userPostalCode, userCity, userAddressRaw } = await findRoutesForUser(userDoc);
+
+        console.log(`[DASHBOARD] userId=${userId} postalCode="${userPostalCode}" city="${userCity}" address="${userAddressRaw?.substring(0,50)}" matchedRoutes=${matchedRoutes.length}`);
+        matchedRoutes.forEach(r => console.log(`  -> "${r.routeName}" postalCode="${r.postalCode}" city="${r.city}"`));
+
+        // ── Primary route for the collection area card ────────────────────────
+        const primaryRoute = matchedRoutes[0] || null;
+
+        // ── Collection area card ──────────────────────────────────────────────
+        let collectionArea = null;
+        if (primaryRoute) {
+            collectionArea = {
+                city:      userCity || primaryRoute.city || "",
+                address:   userAddressRaw,
+                routeName: primaryRoute.routeName
+            };
+        }
+
+        // ── Upcoming pickups ──────────────────────────────────────────────────
+        // Only show Active/Inactive routes — Completed routes are past, not upcoming.
+        // collectionTime format: "YYYY-MM-DD HH:MM"  (date + time)
+        //                     OR "HH:MM" / "HH:MM AM/PM" (time only, no date)
+        const upcomingRaw = [];
+        for (const r of matchedRoutes) {
+            // Skip permanently completed routes in the upcoming list
+            if (r.status === "Completed") continue;
+
+            const rawCT   = (r.collectionTime || "").trim();
+            const parts   = rawCT.split(" ");
+            const first   = parts[0] || "";
+            const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(first);
+
+            let formattedDate, formattedTime, rawDate;
+
+            if (hasDate) {
+                // ── Full datetime: "2026-08-13 10:00" ────────────────────────
+                const [y, mo, d] = first.split("-");
+                formattedDate = `${d}/${mo}/${y}`;
+                rawDate       = new Date(first);          // reliable ISO-like parse
+
+                const timeStr = parts.slice(1).join(" ").trim();
+                if (/^\d{1,2}:\d{2}/.test(timeStr)) {
+                    const [h, m] = timeStr.split(":");
+                    let hour = parseInt(h, 10);
+                    const ampm = hour >= 12 ? "PM" : "AM";
+                    hour = hour % 12 || 12;
+                    formattedTime = `${hour}:${m} ${ampm}`;
+                } else {
+                    formattedTime = timeStr || "—";
+                }
+            } else if (/^\d{1,2}:\d{2}/.test(first)) {
+                // ── Time only: "10:00" or "10:00 AM" ─────────────────────────
+                const [h, m] = first.split(":");
+                let hour = parseInt(h, 10);
+                const ampm = parts[1]?.toUpperCase() === "PM" || hour >= 12 ? "PM" : "AM";
+                hour = hour % 12 || 12;
+                formattedTime = `${hour}:${m} ${ampm}`;
+                formattedDate = "Recurring";
+                rawDate       = new Date(0);              // sort these after dated entries
+            } else if (rawCT) {
+                // ── Unrecognised format — show as-is ─────────────────────────
+                formattedDate = rawCT;
+                formattedTime = "—";
+                rawDate       = new Date(0);
+            } else {
+                // ── No collectionTime set ─────────────────────────────────────
+                formattedDate = "Not scheduled";
+                formattedTime = "—";
+                rawDate       = new Date(0);
+            }
+
+            // Derive display status: runtime collectionStatus takes priority over route.status
+            let displayStatus = "Scheduled";
+            if (r.collectionStatus === "In_Progress" || r.collectionStatus === "Started") {
+                displayStatus = "In Progress";
+            } else if (r.collectionStatus === "Completed") {
+                displayStatus = "Completed";
+            } else if (r.status === "Inactive") {
+                displayStatus = "Inactive";
+            }
+
+            upcomingRaw.push({
+                id:        r._id,
+                routeName: r.routeName,
+                date:      formattedDate,
+                time:      formattedTime,
+                status:    displayStatus,
+                rawDate
+            });
+        }
+        upcomingRaw.sort((a, b) => a.rawDate - b.rawDate);
+        const upcomingPickups = upcomingRaw.slice(0, 5).map(({ rawDate, ...rest }) => rest);
+
+        // ── Monthly pickups & recycled kg ─────────────────────────────────────
+        // NOTE: When the driver ends a collection, CollectionHistory is created with
+        // only driver+route+postalCode — NOT a per-user record. So counting by
+        // CollectionHistory.user always returns 0 for residents.
+        // We count route completions (endedAt in current month) for the user's area instead.
+        const now            = new Date();
+        const monthStart     = new Date(now.getFullYear(), now.getMonth(), 1);
+        const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+        // Build area filter for CollectionHistory (by postalCode)
+        const areaFilter = userPostalCode
+            ? { postalCode: userPostalCode }
+            : {};
+
+        // Monthly pickup count = completed route collections for user's area this month
+        const routeIds = matchedRoutes.map(r => r._id);
+        const [monthlyPickups, historyThisMonth, historyLastMonth] = await Promise.all([
+            // Count route-level completions this month (endedAt set by driver)
+            routeIds.length > 0
+                ? Route.countDocuments({
+                    _id: { $in: routeIds },
+                    collectionStatus: "Completed",
+                    endedAt: { $gte: monthStart }
+                  })
+                : (Object.keys(areaFilter).length > 0
+                    ? CollectionHistory.countDocuments({ ...areaFilter, collectedDate: { $gte: monthStart } })
+                    : 0),
+            // For recycled kg, use CollectionHistory by postalCode
+            Object.keys(areaFilter).length > 0
+                ? CollectionHistory.find({ ...areaFilter, collectedDate: { $gte: monthStart } }).select("quantity")
+                : [],
+            Object.keys(areaFilter).length > 0
+                ? CollectionHistory.find({ ...areaFilter, collectedDate: { $gte: prevMonthStart, $lte: prevMonthEnd } }).select("quantity")
+                : []
         ]);
 
-        let userPostalCode = (userDoc?.postalCode || "").trim();
-        let userCity = (userDoc?.city || "").trim();
-
-        if (userDoc?.role === "driver" && !userPostalCode) {
-            const driverProfile = await Driver.findOne({ email: userDoc.email }).populate("assignedRoute");
-            if (driverProfile && driverProfile.assignedRoute) {
-                userPostalCode = driverProfile.assignedRoute.postalCode || "";
-                userCity = driverProfile.assignedRoute.city || "";
+        function sumKg(records) {
+            let total = 0, hasData = false;
+            for (const rec of records) {
+                const match = String(rec.quantity || "").match(/[\d.]+/);
+                if (match) { total += parseFloat(match[0]); hasData = true; }
             }
+            return { total: parseFloat(total.toFixed(2)), hasData };
         }
+        const thisMonthKg        = sumKg(historyThisMonth);
+        const lastMonthKg        = sumKg(historyLastMonth);
+        const recycledKg          = thisMonthKg.total;
+        const recycledKgLastMonth = lastMonthKg.hasData ? lastMonthKg.total : null;
+        const weightDataAvailable = thisMonthKg.hasData;
 
-        let matchedRoutes = [];
-        if (userPostalCode || userCity) {
-            const query = {
-                status: { $in: ["Active", "Inactive", "Completed"] }
-            };
-            if (userPostalCode) {
-                query.postalCode = userPostalCode;
-            } else {
-                query.city = userCity;
-            }
-            matchedRoutes = await Route.find(query);
-        }
-
-        let allUpcoming = [];
-
-        upcomingRequests.forEach(req => {
-            allUpcoming.push({
-                id: req._id,
-                type: req.garbageType,
-                date: new Date(req.collectionDate).toLocaleDateString("en-GB"),
-                time: "N/A",
-                status: req.status,
-                rawDate: new Date(req.collectionDate)
-            });
+        // ── Open complaints (Pending + Approved = not yet resolved) ───────────
+        const openComplaints = await CollectionRequest.countDocuments({
+            user:   userId,
+            status: { $in: ["Pending", "Approved"] }
         });
 
-        matchedRoutes.forEach(r => {
-            if (r.collectionTime) {
-                const dateStr = r.collectionTime.split(" ")[0]; 
-                const timeStr = r.collectionTime.split(" ").slice(1).join(" ").trim(); 
-                
-                let formattedTime = timeStr;
-                if (/^\d{1,2}:\d{2}/.test(timeStr)) {
-                    let [h, m] = timeStr.split(":");
-                    let hour = parseInt(h, 10);
-                    const ampm = hour >= 12 ? 'PM' : 'AM';
-                    hour = hour % 12;
-                    hour = hour ? hour : 12;
-                    formattedTime = `${hour}:${m} ${ampm}`;
-                }
-
-                allUpcoming.push({
-                    id: r._id,
-                    type: "Scheduled Route",
-                    date: new Date(dateStr).toLocaleDateString("en-GB"),
-                    time: formattedTime,
-                    status: r.status === "Active" ? "Scheduled" : r.status,
-                    rawDate: new Date(dateStr)
-                });
-            }
-        });
-
-        allUpcoming.sort((a, b) => a.rawDate - b.rawDate);
-        const upcomingList = allUpcoming.slice(0, 5).map(u => {
-            const { rawDate, ...rest } = u;
-            return rest;
-        });
-
-        // Calculate next scheduled pickup from routes only, falling back to complaints if no routes exist
-        const routeUpcoming = allUpcoming.filter(u => u.type === "Scheduled Route");
-        const nextPickup = routeUpcoming.length > 0
-            ? {
-                when: routeUpcoming[0].date,
-                time: routeUpcoming[0].time,
-                type: routeUpcoming[0].type
-              }
-            : (allUpcoming.length > 0
-                ? {
-                    when: allUpcoming[0].date,
-                    time: allUpcoming[0].time,
-                    type: allUpcoming[0].type
-                  }
-                : { when: "No upcoming", time: "N/A", type: "N/A" }
-              );
-
-        const alerts = notifications.slice(0, 3).map(n => n.message || n.title || "New notification");
+        // ── Recent alerts from Notification model ─────────────────────────────
+        const notifDocs    = await Notification.find({ receiver: userId }).sort({ createdAt: -1 }).limit(3);
+        const recentAlerts = notifDocs.map(n => ({
+            id:        n._id,
+            title:     n.title || "Notification",
+            message:   n.message || "",
+            createdAt: n.createdAt
+        }));
 
         res.json({
             success: true,
             data: {
-                nextPickup,
-                monthlyPickups: history,
-                recycledKg: 0,
+                collectionArea,
+                monthlyPickups,
+                recycledKg,
+                recycledKgLastMonth,
+                weightDataAvailable,
                 openComplaints,
-                upcoming: upcomingList,
-                alerts
+                upcomingPickups,
+                recentAlerts
             }
         });
     } catch (error) {
@@ -265,42 +417,20 @@ exports.getUserRequests = async (req, res) => {
     }
 };
 
-// 5. View my collection schedule — matched by city or postal code
+// 5. View my collection schedule — matched by 3-tier logic
 exports.getUserSchedule = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("postalCode address role email province district city");
-        let userPostalCode = (user?.postalCode || "").trim();
-        let userCity = (user?.city || "").trim();
-        console.log("getUserSchedule -> User:", user.email, "Role:", user.role, "PostalCode:", userPostalCode, "City:", userCity);
+        const { matchedRoutes, userPostalCode } = await findRoutesForUser(user);
 
-        if (user?.role === "driver" && !userPostalCode) {
-            const driverProfile = await Driver.findOne({ email: user.email }).populate("assignedRoute");
-            if (driverProfile && driverProfile.assignedRoute) {
-                userPostalCode = driverProfile.assignedRoute.postalCode || "";
-                userCity = driverProfile.assignedRoute.city || "";
-                console.log("getUserSchedule -> Driver profile found. Route PostalCode:", userPostalCode, "City:", userCity);
-            } else {
-                console.log("getUserSchedule -> Driver profile or assignedRoute NOT found");
-            }
-        }
-
-        let matchedRoutes = [];
-        if (userPostalCode || userCity) {
-            const query = {
-                status: { $in: ["Active", "Inactive", "Completed"] }
-            };
-            if (userPostalCode) {
-                query.postalCode = userPostalCode;
-            } else {
-                query.city = userCity;
-            }
-            matchedRoutes = await Route.find(query)
+        // For schedule, we still want to populate driver and truck details
+        const routeIds = matchedRoutes.map(r => r._id);
+        const populatedRoutes = await Route.find({ _id: { $in: routeIds } })
             .populate("assignedDriver", "name phone")
             .populate("assignedTruck", "plateNumber")
             .sort({ createdAt: -1 });
-        }
 
-        const scheduleItems = matchedRoutes.map((r) => ({
+        const scheduleItems = populatedRoutes.map((r) => ({
             id: r._id,
             routeName: r.routeName,
             postalCode: r.postalCode,
@@ -414,39 +544,19 @@ exports.getUserHistory = async (req, res) => {
 // 8. Get truck/driver live location for the user's assigned route
 exports.getTruckLocation = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("postalCode address city");
+        const user = await User.findById(req.user.id).select("postalCode address city role email");
+        const { matchedRoutes, userPostalCode } = await findRoutesForUser(user);
 
-        // Priority: query param > profile postalCode > profile city > extract from address
-        let userPostalCode = (req.query.postalCode || user?.postalCode || "").trim();
-        let userCity = (user?.city || "").trim();
+        // Find the most appropriate route with an assigned driver
+        const routeId = matchedRoutes.find(r => r.assignedDriver)?._id;
 
-        // Fallback: try to extract a numeric postal code from the address string
-        if (!userPostalCode && user?.address) {
-            const match = user.address.match(/\b\d{5}\b/);
-            if (match) userPostalCode = match[0];
+        if (!routeId) {
+            return res.status(404).json({ success: false, message: "No truck assigned to your area route." });
         }
 
-        if (!userPostalCode && !userCity) {
-            return res.status(404).json({
-                success: false,
-                message: "No postal code or city found for your account. Please update your profile."
-            });
-        }
-
-        // Find the route for this location with an assigned driver.
-        const query = {
-            assignedDriver: { $ne: null },
-        };
-        if (userPostalCode) {
-            query.postalCode = userPostalCode;
-        } else {
-            query.city = userCity;
-        }
-
-        const route = await Route.findOne(query)
-        .sort({ updatedAt: -1 })           // prefer most recently updated if multiple
-        .populate("assignedDriver", "name location status updatedAt")
-        .populate("assignedTruck",  "_id plateNumber");
+        const route = await Route.findById(routeId)
+            .populate("assignedDriver", "name location status updatedAt")
+            .populate("assignedTruck",  "_id plateNumber");
 
         if (!route || !route.assignedDriver) {
             return res.status(404).json({ success: false, message: "No truck assigned to your area route." });

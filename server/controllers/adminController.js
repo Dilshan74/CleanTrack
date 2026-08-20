@@ -15,10 +15,10 @@ const getOverview = async (req, res) => {
             User.countDocuments({ role: "user", isActive: true }),
             Truck.countDocuments({ status: "Active" }),
             CollectionRequest.countDocuments({ status: "Pending" }),
-            Route.find().select("routeName areas status"),
+            Route.find().select("routeName areas status collectionTime"),
             CollectionHistory.find().sort({ createdAt: -1 }).limit(7)
         ]);
-
+        
         // Count today's pickups from history
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -38,10 +38,26 @@ const getOverview = async (req, res) => {
             weeklyVolume.push(count);
         }
 
+        // Filter for today's routes
+        const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const longDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const todayShort = shortDays[new Date().getDay()];
+        const todayLong = longDays[new Date().getDay()];
+        
+        // Use local timezone date string (YYYY-MM-DD) for matching specific dates
+        const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+
+        const activeRoutes = routes.filter(r => {
+            if (!r.collectionTime) return false;
+            const ct = r.collectionTime;
+            return ct.includes(todayShort) || ct.includes(todayLong) || ct.includes(localISOTime);
+        });
+
         // Route health from area statuses
-        const routeHealth = routes.map(r => {
-            const total = r.areas.length || 1;
-            const collected = r.areas.filter(a => a.status === "Collected").length;
+        const routeHealth = activeRoutes.map(r => {
+            const total = r.areas?.length || 1;
+            const collected = r.areas?.filter(a => a.status === "Collected").length || 0;
             const pct = Math.round((collected / total) * 100);
             const tone = pct >= 80 ? "success" : pct >= 50 ? "warning" : "destructive";
             return { r: r.routeName, p: pct, t: tone };
@@ -305,6 +321,22 @@ const updateComplaintStatus = async (req, res) => {
 
         if (!complaint) {
             return res.status(404).json({ success: false, message: "Complaint not found" });
+        }
+
+        try {
+            if (status === "Collected") {
+                const CollectionHistory = require("../models/collectionHistory");
+                await CollectionHistory.create({
+                    request: complaint._id,
+                    user: complaint.user,
+                    postalCode: complaint.pickupLocation || "N/A",
+                    garbageType: complaint.garbageType || "General waste",
+                    collectedDate: new Date(),
+                    remarks: "Resolved complaint request"
+                });
+            }
+        } catch (err) {
+            console.error("Failed to create CollectionHistory for complaint:", err.message);
         }
 
         res.json({ success: true, complaint });
